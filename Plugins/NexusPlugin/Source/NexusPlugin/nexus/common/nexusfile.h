@@ -5,10 +5,11 @@ namespace nx {
 	public:
 		enum OpenMode {
 			Read		= 0b00000001,
-			Write		= 0b00000010,
-			Append		= 0b00000100,
-			ReadWrite	= Read | Write,
-		};
+            Write		= 0b00000010,
+            Append		= 0b00000100,
+            ReadWrite	= Read | Write,
+        };
+		virtual ~NexusFile() {}
 		virtual void setFileName(const char* uri) = 0;
 		virtual bool open(OpenMode mode) = 0;
 		virtual int read(char* where, unsigned int length) = 0;
@@ -17,8 +18,6 @@ namespace nx {
 		virtual void* map(unsigned int from, unsigned int size) = 0;
 		virtual bool unmap(void* mapped) = 0;
 		virtual bool seek(unsigned int to) = 0;
-
-		int answer_to_everything();
 	};
 }
 
