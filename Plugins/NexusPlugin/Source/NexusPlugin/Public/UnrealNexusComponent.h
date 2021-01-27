@@ -26,6 +26,8 @@ struct FCameraInfo
     FMatrix ModelView, InvertedModelView;
     FMatrix ModelViewProjection, InvertedModelViewProjection;
     FConvexVolume ViewFrustum;
+    float CurrentResolution;
+    bool IsUsingSameResolutionAsBefore;
 };
 
 struct FTraversalElement
@@ -62,10 +64,13 @@ class UUnrealNexusComponent final
     
 private:
     bool Open(const FString& Source);
-    FCameraInfo Info;
+    FCameraInfo CameraInfo;
     int CurrentlyBlockedNodes = 0;
     int CurrentDrawBudget = 0;
     float CurrentError = 0.0f;
+
+    float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
+    float CalculateErrorForNode(const UINT32 NodeID, bool UseTight) const;
     
 protected:
     FUnrealNexusData* ComponentData = new FUnrealNexusData();
@@ -110,6 +115,7 @@ public:
     bool CanNodeBeExpanded(Node* Node, int NodeID, float FirstNodeError, float CurrentCalculatedError) const;
     void AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId) const;
     void AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked) const;
+    void UpdateRemainingErrors();
     FTraversalData DoTraversal();
     void NotifyProxy(FTraversalData& LastTraversalData);
     void Update();
