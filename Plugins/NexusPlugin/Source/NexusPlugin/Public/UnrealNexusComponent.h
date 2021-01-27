@@ -8,7 +8,7 @@
 
 #include "UnrealNexusComponent.generated.h"
 
-enum ENodeStatus
+enum class ENodeStatus
 {
     Dropped, // The node isn't loaded
     Pending, // The node has been selected for loading from disk
