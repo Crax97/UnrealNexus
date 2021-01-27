@@ -174,9 +174,9 @@ FNexusNodeRenderData::~FNexusNodeRenderData()
     BeginReleaseResource(&IndexBuffer);
 }
 
-void FUnrealNexusProxy::AddCandidate(UINT32 CandidateID)
+void FUnrealNexusProxy::AddCandidate(UINT32 CandidateID, float FirstNodeError)
 {
-    CandidateNodes.Add(CandidateID);
+    CandidateNodes.Add(FCandidateNode {CandidateID, FirstNodeError});
 }
 
 void FUnrealNexusProxy::FreeCache(Node* BestNode)
@@ -219,16 +219,34 @@ TOptional<TTuple<UINT32, Node*>> FUnrealNexusProxy::FindBestNode()
 {
     Node* BestNode = nullptr;
     UINT32 BestNodeID = 0;
-    for (UINT32 CandidateID : CandidateNodes)
+    for (FCandidateNode& CandidateNode : CandidateNodes)
     {
-        Node* Candidate = &ComponentData->nodes[CandidateID];
-        if (!Component->IsNodeLoaded(CandidateID) && ( !BestNode || Candidate->error > BestNode->error))
+        Node* Candidate = &ComponentData->nodes[CandidateNode.ID];
+        if (!Component->IsNodeLoaded(CandidateNode.ID) && ( !BestNode || CandidateNode.Error > BestNode->error))
         {
             BestNode = Candidate;
-            BestNodeID = CandidateID;
+            BestNodeID = CandidateNode.ID;
         }
     }
     return BestNode == nullptr ? TOptional<TTuple<UINT32, Node*>>() : TTuple<UINT32, Node*>{BestNodeID, BestNode};
+}
+
+void FUnrealNexusProxy::RemoveCandidateWithId(const UINT32 NodeID)
+{
+    int NodeIndex = -1;
+    for (int i = 0; i < CandidateNodes.Num(); i ++)
+    {
+        FCandidateNode& Candidate = CandidateNodes[i];
+        if (Candidate.ID == NodeID)
+        {
+            NodeIndex = i;
+            break;
+        }
+    }
+    if (NodeIndex != -1)
+    {
+        CandidateNodes.RemoveAt(NodeIndex);
+    }
 }
 
 void FUnrealNexusProxy::Update()
@@ -248,7 +266,7 @@ void FUnrealNexusProxy::Update()
 
     FreeCache(BestNode);
     
-    CandidateNodes.Remove(BestNodeID);
+    RemoveCandidateWithId(BestNodeID);
     JobExecutor->AddNewJobs({ FNexusJob{ EJobKind::Load, BestNodeID, ComponentData } });
     Component->SetNodeStatus(BestNodeID, ENodeStatus::Pending);
     
@@ -351,4 +369,20 @@ FPrimitiveViewRelevance FUnrealNexusProxy::GetViewRelevance(const FSceneView* Vi
     Result.bDynamicRelevance = true;
     Result.bStaticRelevance = false;
     return Result;
+}
+
+void FUnrealNexusProxy::UpdateRemainingErrors(TArray<float>& InstanceErrors) const
+{
+    TArray<UINT32> LoadedNodes;
+    LoadedMeshData.GetKeys(LoadedNodes);
+    for (auto& NodeID : LoadedNodes)
+    {
+        const Node& TheNode = ComponentData->nodes[NodeID];
+        const float NodeError = TheNode.error;
+        if (InstanceErrors[NodeID] == 0)
+        {
+            InstanceErrors[NodeID] = NodeError;
+            // TheNode.error = FMath::Max(TheNode.error, InstanceErrors)
+        }
+    }
 }

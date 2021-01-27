@@ -115,9 +115,7 @@ public:
     bool CanNodeBeExpanded(Node* Node, int NodeID, float FirstNodeError, float CurrentCalculatedError) const;
     void AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId) const;
     void AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked) const;
-    void UpdateRemainingErrors();
     FTraversalData DoTraversal();
-    void NotifyProxy(FTraversalData& LastTraversalData);
     void Update();
     virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
     virtual void OnComponentCreated() override;

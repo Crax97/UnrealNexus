@@ -21,6 +21,21 @@ public:
     ~FNexusNodeRenderData();
 };
 
+struct FCandidateNode
+{
+    UINT32 ID;
+    float Error;
+
+    bool operator==(const UINT32 OtherID) const
+    {
+        return OtherID == ID;
+    }
+    explicit operator UINT32 () const
+    {
+        return ID;
+    }
+};
+
 class FUnrealNexusProxy final
     : public FPrimitiveSceneProxy
 {
@@ -34,17 +49,18 @@ protected:
     class FNexusJobExecutorThread* JobExecutor;
     
     TMap<uint32, FNexusNodeRenderData*> LoadedMeshData;
-    TArray<UINT32> CandidateNodes;
+    TArray<FCandidateNode> CandidateNodes;
     bool bIsWireframe = false;
     int PendingCount = 0;
     int CurrentCacheSize = 0;
     int MaxPending = 0;
     int MaxCacheSize = 0;
     
-    void AddCandidate(UINT32 CandidateID);
+    void AddCandidate(UINT32 CandidateID, float Error);
     void FreeCache(Node* BestNode);
     void Flush();
     TOptional<TTuple<UINT32, Node*>> FindBestNode();
+    void RemoveCandidateWithId(const UINT32 NodeID);
     void Update();
     
 public:
@@ -66,4 +82,5 @@ public:
     virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily,
         uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
     virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
+    void UpdateRemainingErrors(TArray<float>& InstanceErrors) const;
 };

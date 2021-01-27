@@ -210,7 +210,7 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
         const int Id = CurrentElement.Id;
         if(!IsNodeLoaded(Id) && CurrentlyBlockedNodes < MaxBlockedNodes)
         {
-            Proxy->AddCandidate(Id);
+            Proxy->AddCandidate(Id, FirstNodeError);
             RequestedCount ++;
         }
 
@@ -226,7 +226,7 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
         AddNodeChildren(CurrentElement, TraversalData, IsBlocked);
     }
 
-    UpdateRemainingErrors();
+    Proxy->UpdateRemainingErrors(InstanceErrors);
     
     return TraversalData;
 }
@@ -263,11 +263,6 @@ void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElem
             AddNodeToTraversal(TraversalData, PatchNodeId);
         }
     }
-}
-
-void UUnrealNexusComponent::UpdateRemainingErrors()
-{
-
 }
 
 void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId) const
