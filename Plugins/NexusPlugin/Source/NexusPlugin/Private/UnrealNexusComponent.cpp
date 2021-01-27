@@ -13,6 +13,20 @@ struct FNodeComparator
     }
 };
 
+void UUnrealNexusComponent::SetErrorForNode(UINT32 NodeID, float Error)
+{
+    CalculatedErrors.Add(TTuple<UINT32, float>{NodeID, Error});
+}
+
+float UUnrealNexusComponent::GetErrorForNode(const UINT32 NodeID) const
+{
+    if (CalculatedErrors.Contains(NodeID))
+    {
+        return CalculatedErrors[NodeID];
+    }
+    return 0.0f;
+}
+
 UUnrealNexusComponent::UUnrealNexusComponent(const FObjectInitializer& Initializer)
     : UPrimitiveComponent(Initializer)
 {
@@ -226,7 +240,7 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
         AddNodeChildren(CurrentElement, TraversalData, IsBlocked);
     }
 
-    Proxy->UpdateRemainingErrors(InstanceErrors);
+    UpdateRemainingErrors(InstanceErrors);
     
     return TraversalData;
 }
@@ -239,7 +253,7 @@ bool UUnrealNexusComponent::CanNodeBeExpanded(Node* Node, const int NodeID, cons
 }
 
 
-void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked) const
+void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, const bool ShouldMarkBlocked)
 {
     Node* CurrentNode = CurrentElement.TheNode; 
     Node* NextNode = &ComponentData->nodes[CurrentElement.Id + 1];
@@ -265,16 +279,32 @@ void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElem
     }
 }
 
-void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId) const
+void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId)
 {
     TraversalData.VisitedNodes.Add(NewNodeId);
     Node* NewNode = &ComponentData->nodes[NewNodeId];
 
     const float NodeError = CalculateErrorForNode(NewNodeId, false);
     TraversalData.InstanceErrors[NewNodeId] = NodeError;
-    ComponentData->nodes[NewNodeId].error = FMath::Max(NodeError, ComponentData->nodes[NewNodeId].error);
+    SetErrorForNode(NewNodeId, FMath::Max(NodeError, GetErrorForNode(NewNodeId)));
     
     TraversalData.TraversalQueue.HeapPush({NewNode, NewNodeId}, FNodeComparator());
+}
+
+
+void UUnrealNexusComponent::UpdateRemainingErrors(TArray<float>& InstanceErrors)
+{
+    TArray<UINT32> LoadedNodes = Proxy->GetLoadedNodes();
+    for (auto& NodeID : LoadedNodes)
+    {
+        const Node& TheNode = ComponentData->nodes[NodeID];
+        const float NodeError = CalculateErrorForNode(NodeID, false);
+        if (InstanceErrors[NodeID] == 0)
+        {
+            InstanceErrors[NodeID] = NodeError;
+            SetErrorForNode(NodeID, FMath::Max( GetErrorForNode(NodeID),  NodeError));
+        }
+    }
 }
 
 void UUnrealNexusComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)

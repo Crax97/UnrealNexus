@@ -371,18 +371,9 @@ FPrimitiveViewRelevance FUnrealNexusProxy::GetViewRelevance(const FSceneView* Vi
     return Result;
 }
 
-void FUnrealNexusProxy::UpdateRemainingErrors(TArray<float>& InstanceErrors) const
+TArray<UINT32> FUnrealNexusProxy::GetLoadedNodes() const
 {
     TArray<UINT32> LoadedNodes;
     LoadedMeshData.GetKeys(LoadedNodes);
-    for (auto& NodeID : LoadedNodes)
-    {
-        const Node& TheNode = ComponentData->nodes[NodeID];
-        const float NodeError = TheNode.error;
-        if (InstanceErrors[NodeID] == 0)
-        {
-            InstanceErrors[NodeID] = NodeError;
-            // TheNode.error = FMath::Max(TheNode.error, InstanceErrors)
-        }
-    }
+    return LoadedNodes;
 }
