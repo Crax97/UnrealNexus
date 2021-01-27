@@ -55,7 +55,7 @@ void FNexusNodeRenderData::CreatePositionBuffer(nx::Node& Node, nx::NodeData& Da
     for (int i = 0; i < Node.nvert; i++)
     {
         vcg::Point3f Point = Data.coords()[i];
-        FVector Vertex{ Point.X(), Point.Y(), Point.Z() };
+        const FVector Vertex{ Point.X(), Point.Y(), Point.Z() };
         Vertices[i] = Vertex;
     }
 

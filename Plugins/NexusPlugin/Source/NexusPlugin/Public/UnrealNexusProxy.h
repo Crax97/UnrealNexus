@@ -57,10 +57,17 @@ protected:
     int MaxCacheSize = 0;
     
     void AddCandidate(UINT32 CandidateID, float Error);
+
+    // Removes the worst node in the cache until there's enough space to load other nodes
     void FreeCache(Node* BestNode);
+
+    // Removes everything from the cache
     void Flush();
+    
     TOptional<TTuple<UINT32, Node*>> FindBestNode();
+
     void RemoveCandidateWithId(const UINT32 NodeID);
+
     void Update();
     
 public:

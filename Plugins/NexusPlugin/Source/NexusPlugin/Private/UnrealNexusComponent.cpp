@@ -13,20 +13,6 @@ struct FNodeComparator
     }
 };
 
-void UUnrealNexusComponent::SetErrorForNode(UINT32 NodeID, float Error)
-{
-    CalculatedErrors.Add(TTuple<UINT32, float>{NodeID, Error});
-}
-
-float UUnrealNexusComponent::GetErrorForNode(const UINT32 NodeID) const
-{
-    if (CalculatedErrors.Contains(NodeID))
-    {
-        return CalculatedErrors[NodeID];
-    }
-    return 0.0f;
-}
-
 UUnrealNexusComponent::UUnrealNexusComponent(const FObjectInitializer& Initializer)
     : UPrimitiveComponent(Initializer)
 {
@@ -68,6 +54,20 @@ bool UUnrealNexusComponent::Open(const FString& Source)
     return true;
 }
 
+void UUnrealNexusComponent::SetErrorForNode(UINT32 NodeID, float Error)
+{
+    CalculatedErrors.Add(TTuple<UINT32, float>{NodeID, Error});
+}
+
+float UUnrealNexusComponent::GetErrorForNode(const UINT32 NodeID) const
+{
+    if (CalculatedErrors.Contains(NodeID))
+    {
+        return CalculatedErrors[NodeID];
+    }
+    return 0.0f;
+}
+
 float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bool UseTight) const
 {
     Node& SelectedNode = ComponentData->nodes[NodeID];
@@ -85,7 +85,7 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
     const float BoundingSphereDistanceFromViewFrustum = CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SelectedNode.tight_radius);
     if (BoundingSphereDistanceFromViewFrustum < -SphereRadius)
     {
-        CalculatedError /= 101.0f;
+        CalculatedError /= Outer_Node_Factor;
     } else if (BoundingSphereDistanceFromViewFrustum < 0)
     {
         CalculatedError /= 1 - (BoundingSphereDistanceFromViewFrustum / SphereRadius) * 100.0f;
@@ -297,7 +297,7 @@ void UUnrealNexusComponent::UpdateRemainingErrors(TArray<float>& InstanceErrors)
     TArray<UINT32> LoadedNodes = Proxy->GetLoadedNodes();
     for (auto& NodeID : LoadedNodes)
     {
-        const Node& TheNode = ComponentData->nodes[NodeID];
+        // const Node& TheNode = ComponentData->nodes[NodeID];
         const float NodeError = CalculateErrorForNode(NodeID, false);
         if (InstanceErrors[NodeID] == 0)
         {
