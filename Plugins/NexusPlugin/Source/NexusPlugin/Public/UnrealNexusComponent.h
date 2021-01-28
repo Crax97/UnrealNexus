@@ -34,6 +34,7 @@ struct FTraversalElement
 {
     Node* TheNode;
     UINT32 Id;
+    float CalculatedError;
 };
 
 struct FTraversalData

@@ -211,14 +211,14 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
     // Load roots
     for (UINT32 i = 0; i < ComponentData->nroots; i ++)
     {
-        VisitingNodes.HeapPush({ &ComponentData->nodes[i], i }, FNodeComparator() );
+        AddNodeToTraversal(TraversalData, i);
     }
 
     int RequestedCount = 0;
     CurrentlyBlockedNodes = 0;
     while(VisitingNodes.Num() > 0 && CurrentlyBlockedNodes < MaxBlockedNodes)
     {
-        const float FirstNodeError = ComponentData->nodes[0].error;
+        const float FirstNodeError = VisitingNodes[0].CalculatedError;
         FTraversalElement CurrentElement = VisitingNodes.Pop();
 
         const int Id = CurrentElement.Id;
@@ -288,7 +288,7 @@ void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, co
     TraversalData.InstanceErrors[NewNodeId] = NodeError;
     SetErrorForNode(NewNodeId, FMath::Max(NodeError, GetErrorForNode(NewNodeId)));
     
-    TraversalData.TraversalQueue.HeapPush({NewNode, NewNodeId}, FNodeComparator());
+    TraversalData.TraversalQueue.HeapPush({NewNode, NewNodeId, NodeError}, FNodeComparator());
 }
 
 
