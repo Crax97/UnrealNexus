@@ -269,8 +269,8 @@ void FUnrealNexusProxy::Update()
     FreeCache(BestNode);
     
     RemoveCandidateWithId(BestNodeID);
-    JobExecutor->AddNewJobs({ FNexusJob{ EJobKind::Load, BestNodeID, ComponentData } });
     Component->SetNodeStatus(BestNodeID, ENodeStatus::Pending);
+    JobExecutor->AddNewJobs({ FNexusJob{ EJobKind::Load, BestNodeID, ComponentData } });
     
     FNexusJob DoneJob;
     TQueue<FNexusJob>& FinishedJobs = JobExecutor->GetJobsDone();
