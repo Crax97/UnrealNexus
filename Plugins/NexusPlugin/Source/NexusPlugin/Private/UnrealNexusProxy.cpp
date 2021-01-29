@@ -185,11 +185,13 @@ void FUnrealNexusProxy::FreeCache(Node* BestNode)
     {
         Node* Worst = nullptr;
         UINT32 WorstID = 0;
-
+        TArray<UINT32> LoadedNodes;
+        LoadedMeshData.GenerateKeyArray(LoadedNodes);
         for (UINT32 ID = 0; ID < ComponentData->header.n_nodes; ID ++)
         {
             Node* SelectedNode = &ComponentData->nodes[ID];
-            if (!Worst || SelectedNode->error < Worst->error)
+            const float SelectedNodeError = Component->GetErrorForNode(ID);
+            if (!Worst || SelectedNodeError < Component->GetErrorForNode(WorstID))
             {
                 Worst = SelectedNode;
                 WorstID = ID;
@@ -222,7 +224,7 @@ TOptional<TTuple<UINT32, Node*>> FUnrealNexusProxy::FindBestNode()
     for (FCandidateNode& CandidateNode : CandidateNodes)
     {
         Node* Candidate = &ComponentData->nodes[CandidateNode.ID];
-        if (!Component->IsNodeLoaded(CandidateNode.ID) && ( !BestNode || CandidateNode.Error > BestNode->error))
+        if (!Component->IsNodeLoaded(CandidateNode.ID) && ( !BestNode || CandidateNode.FirstNodeError > BestNode->error))
         {
             BestNode = Candidate;
             BestNodeID = CandidateNode.ID;

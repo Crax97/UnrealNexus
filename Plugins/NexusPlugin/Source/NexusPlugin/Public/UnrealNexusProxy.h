@@ -24,7 +24,8 @@ public:
 struct FCandidateNode
 {
     UINT32 ID;
-    float Error;
+    float FirstNodeError;
+    float CandidateError;
 
     bool operator==(const UINT32 OtherID) const
     {
@@ -55,8 +56,11 @@ protected:
     int CurrentCacheSize = 0;
     int MaxPending = 0;
     int MaxCacheSize = 0;
+
+    const float TargetError = 2.0f;
+    float CurrentError = TargetError;
     
-    void AddCandidate(UINT32 CandidateID, float Error);
+    void AddCandidate(UINT32 CandidateID, float FirstNodeError);
 
     // Removes the worst node in the cache until there's enough space to load other nodes
     void FreeCache(Node* BestNode);
@@ -78,6 +82,11 @@ public:
 
     void LoadGPUData(const uint32 N);
     void DropGPUData(uint32 N);
+    
+    float GetCurrentError() const
+    {
+        return CurrentError;
+    }
     
     virtual SIZE_T GetTypeHash() const override
     {
