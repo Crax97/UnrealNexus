@@ -73,8 +73,8 @@ private:
     // An outer node is a node outside the view frustum
     // This is done to reduce the weight of outer nodes,
     // while being consistent with the tree
-    const float Outer_Node_Factor = 101.0f;
-    TMap<UINT32, float> CalculatedErrors;
+    const float Outer_Node_Factor = 100.0f;
+    TArray<float> CalculatedErrors;
 
 
     float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
@@ -91,7 +91,7 @@ protected:
     bool bIsLoaded = false;
 
     // Updates the status of the component
-    void Update();
+    void Update(float DeltaTime);
 
     // Updates the calculated error for the node
     void SetErrorForNode(UINT32 NodeID, float Error);
@@ -99,7 +99,7 @@ protected:
     // Gets the calculated error for the node
     float GetErrorForNode(UINT32 NodeID) const;
     
-    bool CanNodeBeExpanded(Node* Node, int NodeID, float FirstNodeError, float CurrentCalculatedError) const;
+    bool CanNodeBeExpanded(Node* Node, int NodeID, float NodeError, float CurrentCalculatedError) const;
     void AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId);
     void AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked);
     
@@ -127,9 +127,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int DrawBudget = 5 * (1 << 20);
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0", ClampMax="30"))
     float TargetError = 2.0f;
-    
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0"))
+    float RootNodesInitialError = 1e20;
     UPROPERTY(EditAnywhere)
     EWindingOrder WindingOrder = EWindingOrder::Counter_Clockwise;
     /*

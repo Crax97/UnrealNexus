@@ -1,5 +1,6 @@
 ﻿#include "UnrealNexusProxy.h"
 #include "NexusJobExecutorThread.h"
+#include "Animation/AnimCompress.h"
 
 template <class T>
 FVertexBufferRHIRef CreateBufferAndFillWithData(const T* Data, const SIZE_T Size)
@@ -209,6 +210,8 @@ void FUnrealNexusProxy::FreeCache(Node* BestNode)
 
 void FUnrealNexusProxy::Flush()
 {
+    if (LoadedMeshData.Num() == 0) 
+        return;
     TArray<UINT32> LoadedNodes;
     LoadedMeshData.GetKeys(LoadedNodes);
     for (UINT32 Node : LoadedNodes)
@@ -251,8 +254,28 @@ void FUnrealNexusProxy::RemoveCandidateWithId(const UINT32 NodeID)
     }
 }
 
-void FUnrealNexusProxy::Update()
+void FUnrealNexusProxy::BeginFrame(float DeltaSeconds)
 {
+    const float FPS = 1.0 / DeltaSeconds;
+    if (MinFPS > 0)
+    {
+        const float Ratio = MinFPS / FPS;
+        if (Ratio > 1.1f)
+        {
+            CurrentError *= 1.05;
+        } else if (Ratio < 0.9f)
+        {
+            CurrentError *= 0.95;
+        }
+        CurrentError = FMath::Max(TargetError, FMath::Min(MaxError, CurrentError));
+    }
+    CandidateNodes.Empty();
+    CurrentError = FMath::Max(TargetError, FMath::Min(MaxError, CurrentError));
+}
+
+void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
+{
+    LastTraversalData = InTraversalData;
     if (this->PendingCount >= this->MaxPending)
         return;
 
@@ -266,6 +289,7 @@ void FUnrealNexusProxy::Update()
     Node* BestNode = OptionalBestNode.GetValue().Value;
     const UINT32 BestNodeID = OptionalBestNode.GetValue().Key;
 
+    // TODO: Pick a better name
     FreeCache(BestNode);
     
     RemoveCandidateWithId(BestNodeID);
@@ -292,6 +316,7 @@ const int InMaxCacheSize)
 {
     JobExecutor = new FNexusJobExecutorThread(ComponentData->file);
     JobThread = FRunnableThread::Create(JobExecutor, TEXT("Nexus Node Loader"));
+    SetWireframeColor(FLinearColor::Green);
 }
 
 FUnrealNexusProxy::~FUnrealNexusProxy()
@@ -332,15 +357,95 @@ void FUnrealNexusProxy::DropGPUData(uint32 N)
     });
 }
 
+int32 FUnrealNexusProxy::CollectOccluderElements(FOccluderElementsCollector& Collector) const
+{
+    return 0;
+}
+
+bool FUnrealNexusProxy::CanBeOccluded() const
+{
+    // TODO: For now
+    return false;
+}
+
+void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, FMeshElementCollector& Collector, const FEngineShowFlags& EngineShowFlags) const
+{
+    int RenderedCount = 0;
+    const TSet<UINT32>& SelectedNodes = LastTraversalData.SelectedNodes;
+    for (UINT32 Id : SelectedNodes)
+    {
+        FNexusNodeRenderData* Data = LoadedMeshData[Id];
+        
+        Node& CurrentNode = ComponentData->nodes[Id];
+        Node& NextNode = ComponentData->nodes[Id + 1];
+        bool IsVisible = false;
+        const UINT32 NextNodeFirstPatch = NextNode.first_patch;
+        for (UINT32 PatchId = CurrentNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
+        {
+            const int ChildNode = ComponentData->patches[PatchId].node;
+            if (!SelectedNodes.Contains(ChildNode))
+            {
+                IsVisible = true;
+                break;
+            }
+        }
+        if(!IsVisible) continue;
+
+        int Offset = 0;
+        int EndIndex = 0;
+        for (UINT32 PatchId = CurrentNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
+        {
+            const Patch& CurrentNodePatch = ComponentData->patches[PatchId];
+            const UINT32 ChildNode = CurrentNodePatch.node;
+            if (!SelectedNodes.Contains(ChildNode))
+            {
+                EndIndex = CurrentNodePatch.triangle_offset;
+                if (PatchId < NextNodeFirstPatch - 1) // TODO: Ask prof if moving if out can solve this
+                    continue;
+            }
+            
+            if (EndIndex > Offset)
+            {
+                FMeshBatch& Mesh = Collector.AllocateMesh();
+                Mesh.bWireframe = EngineShowFlags.Wireframe;
+                Mesh.VertexFactory = &Data->NodeVertexFactory;
+                Mesh.Type = PT_TriangleList;
+                Mesh.DepthPriorityGroup = SDPG_World;
+                Mesh.MaterialRenderProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy();
+                Mesh.bUseAsOccluder = true;
+    
+                auto& Element = Mesh.Elements[0];
+                Element.IndexBuffer = &Data->IndexBuffer;
+                Element.FirstIndex = Offset;
+                Element.NumPrimitives = (EndIndex - Offset);
+                Collector.AddMesh(ViewIndex, Mesh);
+                RenderedCount += (EndIndex - Offset);
+            }
+            Offset += CurrentNodePatch.triangle_offset;
+        } 
+    }
+
+    TotalRenderedCount += RenderedCount;
+}
+
 void FUnrealNexusProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views,
-    const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
+                                               const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
 {
     for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
     {
 
         const auto& EngineShowFlags = ViewFamily.EngineShowFlags;
-	
+
+        /*
+         * TODO: 1) Implementare algoritmo di selezione (Nexus3D.js:316)
+         * Alternativa 1) Direttamente sul rendering thread
+         * Alternativa 2) Sul game thread, poi mi passo la roba sul rendering thread
+         */
         if (!(VisibilityMap & (1 << ViewIndex))) continue;
+
+        DrawEdgeNodes(ViewIndex, Collector, EngineShowFlags);
+
+#if 0
         for (const auto& NodeIndexAndRenderingData : LoadedMeshData) 
         {
             FNexusNodeRenderData* Data = NodeIndexAndRenderingData.Value;
@@ -357,6 +462,7 @@ void FUnrealNexusProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& 
             Element.NumPrimitives = Data->NumPrimitives;
             Collector.AddMesh(ViewIndex, Mesh);
         }
+#endif
     }
 }
 

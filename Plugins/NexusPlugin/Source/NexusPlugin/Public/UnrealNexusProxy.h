@@ -48,7 +48,10 @@ protected:
     
     class FRunnableThread* JobThread;
     class FNexusJobExecutorThread* JobExecutor;
+
+    TArray<FBoxSphereBounds> MeshBounds;
     
+    FTraversalData LastTraversalData;
     TMap<uint32, FNexusNodeRenderData*> LoadedMeshData;
     TArray<FCandidateNode> CandidateNodes;
     bool bIsWireframe = false;
@@ -56,10 +59,13 @@ protected:
     int CurrentCacheSize = 0;
     int MaxPending = 0;
     int MaxCacheSize = 0;
+    int MinFPS = 15;
 
     const float TargetError = 2.0f;
+    const float MaxError = 15.0f;
     float CurrentError = TargetError;
-    
+    mutable int TotalRenderedCount = 0;
+
     void AddCandidate(UINT32 CandidateID, float FirstNodeError);
 
     // Removes the worst node in the cache until there's enough space to load other nodes
@@ -71,8 +77,9 @@ protected:
     TOptional<TTuple<UINT32, Node*>> FindBestNode();
 
     void RemoveCandidateWithId(const UINT32 NodeID);
-
-    void Update();
+    void BeginFrame(float DeltaSeconds);
+    void Update(FTraversalData InLastTraversalData);
+    void EndFrame();
     
 public:
     explicit FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending = 5,
@@ -93,10 +100,13 @@ public:
         static uint64 Num;
         return reinterpret_cast<SIZE_T>(&Num);
     }
-    
+
+    virtual int32 CollectOccluderElements(FOccluderElementsCollector& Collector) const override;
+    virtual bool CanBeOccluded() const override;
     virtual uint32 GetMemoryFootprint() const override { return sizeof *this + GetAllocatedSize(); }
+    void DrawEdgeNodes(const int ViewIndex, FMeshElementCollector& Collector, const FEngineShowFlags& EngineShowFlags) const;
     virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily,
-        uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
+                                        uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
     virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
     TArray<UINT32> GetLoadedNodes() const;
 };

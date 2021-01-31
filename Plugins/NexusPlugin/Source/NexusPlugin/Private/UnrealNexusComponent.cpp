@@ -5,6 +5,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/LocalPlayer.h"
 
+constexpr float GScale = 10.0f;
+
 struct FNodeComparator
 {
     bool operator()(const FTraversalElement& A, const FTraversalElement& B) const
@@ -51,21 +53,23 @@ bool UUnrealNexusComponent::Open(const FString& Source)
         UE_LOG(NexusInfo, Log, TEXT("Could not open the file"));
         return false;
     }
+    CalculatedErrors.SetNum(ComponentData->header.n_nodes);
+    for (UINT32 RootId = 0; RootId < ComponentData->nroots; RootId++)
+    {
+        Node& RootNode = ComponentData->nodes[RootId];
+        RootNode.error = RootNodesInitialError * RootNode.tight_radius;
+    }
     return true;
 }
 
 void UUnrealNexusComponent::SetErrorForNode(UINT32 NodeID, float Error)
 {
-    CalculatedErrors.Add(TTuple<UINT32, float>{NodeID, Error});
+    CalculatedErrors[NodeID] = Error;
 }
 
 float UUnrealNexusComponent::GetErrorForNode(const UINT32 NodeID) const
 {
-    if (CalculatedErrors.Contains(NodeID))
-    {
-        return CalculatedErrors[NodeID];
-    }
-    return 0.0f;
+    return CalculatedErrors[NodeID];
 }
 
 float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bool UseTight) const
@@ -85,12 +89,12 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
     const float BoundingSphereDistanceFromViewFrustum = CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SelectedNode.tight_radius);
     if (BoundingSphereDistanceFromViewFrustum < -SphereRadius)
     {
-        CalculatedError /= Outer_Node_Factor;
+        CalculatedError /= Outer_Node_Factor + 1.0f;
     } else if (BoundingSphereDistanceFromViewFrustum < 0)
     {
-        CalculatedError /= 1 - (BoundingSphereDistanceFromViewFrustum / SphereRadius) * 100.0f;
+        CalculatedError /= 1.0f - (BoundingSphereDistanceFromViewFrustum / SphereRadius) * Outer_Node_Factor;
     }
-    return CalculatedError;
+    return CalculatedError * GScale;
 }
 
 float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere, const float SphereTightRadius) const 
@@ -120,12 +124,13 @@ FPrimitiveSceneProxy* UUnrealNexusComponent::CreateSceneProxy()
     return static_cast<FPrimitiveSceneProxy*>(Proxy);
 }
 
-void UUnrealNexusComponent::Update()
+void UUnrealNexusComponent::Update(float DeltaSeconds)
 {
     if (!bIsLoaded || !Proxy) return;
     UpdateCameraView();
+    Proxy->BeginFrame(DeltaSeconds);
     FTraversalData TraversalData = DoTraversal();
-    Proxy->Update();
+    Proxy->Update(TraversalData);
 }
 
 void UUnrealNexusComponent::UpdateCameraView()
@@ -147,11 +152,12 @@ void UUnrealNexusComponent::UpdateCameraView()
     CameraInfo.View = ViewMatrices.GetViewMatrix();
     CameraInfo.Projection = ViewMatrices.GetProjectionMatrix();
     
-    CameraInfo.ModelView = CameraInfo.Model * CameraInfo.View;
+    CameraInfo.ModelView = CameraInfo.View * CameraInfo.Model;
+    
     // Composition of affine transformations so the det is always != 0, we can use InverseFast
     CameraInfo.InvertedModelView = CameraInfo.ModelView.InverseFast(); 
     
-    CameraInfo.ModelViewProjection = CameraInfo.Model * CameraInfo.View * CameraInfo.Projection;
+    CameraInfo.ModelViewProjection = CameraInfo.Projection * CameraInfo.View * CameraInfo.Model;
     CameraInfo.InvertedModelViewProjection = CameraInfo.ModelViewProjection.InverseFast();
 
     CameraInfo.ViewFrustum = SceneView->ViewFrustum;
@@ -214,21 +220,22 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
         AddNodeToTraversal(TraversalData, i);
     }
 
+    const float CurrentProxyError = Proxy->GetCurrentError();
     int RequestedCount = 0;
     CurrentlyBlockedNodes = 0;
     while(VisitingNodes.Num() > 0 && CurrentlyBlockedNodes < MaxBlockedNodes)
     {
-        const float FirstNodeError = VisitingNodes[0].CalculatedError;
+        
         FTraversalElement CurrentElement = VisitingNodes.Pop();
-
+        const float NodeError = CurrentElement.CalculatedError;
         const int Id = CurrentElement.Id;
         if(!IsNodeLoaded(Id) && CurrentlyBlockedNodes < MaxBlockedNodes)
         {
-            Proxy->AddCandidate(Id, FirstNodeError);
+            Proxy->AddCandidate(Id, NodeError);
             RequestedCount ++;
         }
 
-        const bool IsBlocked = BlockedNodes.Contains(Id) || !CanNodeBeExpanded(CurrentElement.TheNode, CurrentElement.Id, FirstNodeError, CurrentError);
+        const bool IsBlocked = BlockedNodes.Contains(Id) || !CanNodeBeExpanded(CurrentElement.TheNode, CurrentElement.Id, NodeError, CurrentProxyError);
         if (IsBlocked)
         {
             CurrentlyBlockedNodes ++;
@@ -245,11 +252,11 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
     return TraversalData;
 }
 
-bool UUnrealNexusComponent::CanNodeBeExpanded(Node* Node, const int NodeID, const float FirstNodeError, const float CurrentCalculatedError) const
+bool UUnrealNexusComponent::CanNodeBeExpanded(Node* Node, const int NodeID, const float NodeError, const float CurrentCalculatedError) const
 {
-    return FirstNodeError > CurrentCalculatedError &&
-        CurrentDrawBudget < DrawBudget &&
-        !IsNodeLoaded(NodeID);
+    return NodeError > TargetError &&
+        CurrentDrawBudget <= DrawBudget &&
+        IsNodeLoaded(NodeID);
 }
 
 
@@ -299,7 +306,7 @@ void UUnrealNexusComponent::UpdateRemainingErrors(TArray<float>& InstanceErrors)
     {
         // const Node& TheNode = ComponentData->nodes[NodeID];
         const float NodeError = CalculateErrorForNode(NodeID, false);
-        if (InstanceErrors[NodeID] == 0)
+        if (InstanceErrors[NodeID] == 0.0f)
         {
             InstanceErrors[NodeID] = NodeError;
             SetErrorForNode(NodeID, FMath::Max( GetErrorForNode(NodeID),  NodeError));
@@ -333,6 +340,6 @@ void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
     if(!bIsLoaded) return;
-    Update();
+    Update(DeltaTime);
 
 }
