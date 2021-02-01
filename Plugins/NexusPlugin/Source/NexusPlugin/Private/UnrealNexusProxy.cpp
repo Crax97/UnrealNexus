@@ -47,6 +47,7 @@ void FNexusNodeRenderData::CreateIndexBuffer(Signature& Sig, Node& Node,  nx::No
     FMemory::Memcpy(Pointer, Indices.GetData(), Indices.Num() * sizeof(uint16));
     RHIUnlockIndexBuffer(IndexBuffer.IndexBufferRHI);
     BeginInitResource(&IndexBuffer);
+    
 }
 
 void FNexusNodeRenderData::CreatePositionBuffer(nx::Node& Node, nx::NodeData& Data)
@@ -375,7 +376,8 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, FMeshElementCollector
     for (UINT32 Id : SelectedNodes)
     {
         FNexusNodeRenderData* Data = LoadedMeshData[Id];
-        
+
+        // Detecting if this node is on the edge
         Node& CurrentNode = ComponentData->nodes[Id];
         Node& NextNode = ComponentData->nodes[Id + 1];
         bool IsVisible = false;
@@ -416,12 +418,12 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, FMeshElementCollector
     
                 auto& Element = Mesh.Elements[0];
                 Element.IndexBuffer = &Data->IndexBuffer;
-                Element.FirstIndex = Offset;
+                Element.FirstIndex = Offset * 3;
                 Element.NumPrimitives = (EndIndex - Offset);
                 Collector.AddMesh(ViewIndex, Mesh);
                 RenderedCount += (EndIndex - Offset);
             }
-            Offset += CurrentNodePatch.triangle_offset;
+            Offset = CurrentNodePatch.triangle_offset;
         } 
     }
 

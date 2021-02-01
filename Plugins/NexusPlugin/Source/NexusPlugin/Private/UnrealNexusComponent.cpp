@@ -161,6 +161,7 @@ void UUnrealNexusComponent::UpdateCameraView()
     CameraInfo.InvertedModelViewProjection = CameraInfo.ModelViewProjection.InverseFast();
 
     CameraInfo.ViewFrustum = SceneView->ViewFrustum;
+
     FVector& ViewpointLocation = CameraInfo.ViewpointLocation;
 
     // WTF?
