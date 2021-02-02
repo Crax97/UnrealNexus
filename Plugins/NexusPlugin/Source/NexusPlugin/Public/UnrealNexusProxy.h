@@ -55,6 +55,8 @@ protected:
     TMap<uint32, FNexusNodeRenderData*> LoadedMeshData;
     TArray<FCandidateNode> CandidateNodes;
     bool bIsWireframe = false;
+    bool bIsReady = false;
+    
     int PendingCount = 0;
     int CurrentCacheSize = 0;
     int MaxPending = 0;
@@ -65,6 +67,7 @@ protected:
     const float MaxError = 15.0f;
     float CurrentError = TargetError;
     mutable int TotalRenderedCount = 0;
+    FMaterialRenderProxy* MaterialProxy;
 
     void AddCandidate(UINT32 CandidateID, float FirstNodeError);
 
@@ -100,13 +103,17 @@ public:
         static uint64 Num;
         return reinterpret_cast<SIZE_T>(&Num);
     }
-
-    virtual int32 CollectOccluderElements(FOccluderElementsCollector& Collector) const override;
+    
     virtual bool CanBeOccluded() const override;
     virtual uint32 GetMemoryFootprint() const override { return sizeof *this + GetAllocatedSize(); }
-    void DrawEdgeNodes(const int ViewIndex, FMeshElementCollector& Collector, const FEngineShowFlags& EngineShowFlags) const;
+    void DrawEdgeNodes(const int ViewIndex, const FSceneView* View, FMeshElementCollector& Collector, const FEngineShowFlags& EngineShowFlags) const;
     virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily,
                                         uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
     virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
     TArray<UINT32> GetLoadedNodes() const;
+    void GetReady()
+    {
+        bIsReady = true;
+    }
+    bool IsReady() const { return bIsReady; }
 };

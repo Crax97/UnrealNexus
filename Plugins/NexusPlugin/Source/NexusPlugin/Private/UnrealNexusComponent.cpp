@@ -5,7 +5,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/LocalPlayer.h"
 
-constexpr float GScale = 10.0f;
+// One unit in Unreal is 100cms
+constexpr float GUnrealScaleConversion = 100.0f;
 
 struct FNodeComparator
 {
@@ -31,7 +32,7 @@ UUnrealNexusComponent::~UUnrealNexusComponent()
         ComponentData->DropFromRam(N);
     }
     
-    if (Proxy)
+    if (Proxy && Proxy->IsReady())
     {
         Proxy->Flush();
     }
@@ -59,6 +60,8 @@ bool UUnrealNexusComponent::Open(const FString& Source)
         Node& RootNode = ComponentData->nodes[RootId];
         RootNode.error = RootNodesInitialError * RootNode.tight_radius;
     }
+    ComponentBoundsRadius = ComponentData->boundingSphere().Radius() * GUnrealScaleConversion;
+    UpdateBodySetup();
     return true;
 }
 
@@ -87,6 +90,7 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
     
     const float SphereRadius = UseTight ? SelectedNode.tight_radius : NodeBoundingSphere.Radius();
     const float BoundingSphereDistanceFromViewFrustum = CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SelectedNode.tight_radius);
+
     if (BoundingSphereDistanceFromViewFrustum < -SphereRadius)
     {
         CalculatedError /= Outer_Node_Factor + 1.0f;
@@ -94,7 +98,7 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
     {
         CalculatedError /= 1.0f - (BoundingSphereDistanceFromViewFrustum / SphereRadius) * Outer_Node_Factor;
     }
-    return CalculatedError * GScale;
+    return CalculatedError * GUnrealScaleConversion;
 }
 
 float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere, const float SphereTightRadius) const 
@@ -118,6 +122,14 @@ float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg:
     return MinDistance;
 }
 
+void UUnrealNexusComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials) const
+{
+    if (ModelMaterial != nullptr)
+    {
+        OutMaterials.Add(ModelMaterial);
+    }
+}
+
 FPrimitiveSceneProxy* UUnrealNexusComponent::CreateSceneProxy()
 {
     Proxy = new FUnrealNexusProxy(this);
@@ -126,10 +138,12 @@ FPrimitiveSceneProxy* UUnrealNexusComponent::CreateSceneProxy()
 
 void UUnrealNexusComponent::Update(float DeltaSeconds)
 {
+    Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), 1000.0f));
+    UpdateBounds();
     if (!bIsLoaded || !Proxy) return;
     UpdateCameraView();
     Proxy->BeginFrame(DeltaSeconds);
-    FTraversalData TraversalData = DoTraversal();
+    const FTraversalData TraversalData = DoTraversal();
     Proxy->Update(TraversalData);
 }
 
@@ -138,13 +152,13 @@ void UUnrealNexusComponent::UpdateCameraView()
     // TODO: Remove hardcoded player index
     // TODO: Check for Viewport, ViewportClient and Player
     ULocalPlayer* Player = GetWorld()->GetFirstLocalPlayerFromController();
-    CameraInfo.Viewport = Player->ViewportClient->Viewport;
+    CameraInfo.ViewportSize = Player->ViewportClient->Viewport->GetSizeXY();
     FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(
-        CameraInfo.Viewport,
+        Player->ViewportClient->Viewport,
         GetWorld()->Scene,
         Player->ViewportClient->EngineShowFlags)
         .SetRealtimeUpdate(true));
-    FSceneView* SceneView = Player->CalcSceneView(&ViewFamily, CameraInfo.ViewpointLocation, CameraInfo.ViewpointRotation, CameraInfo.Viewport);
+    FSceneView* SceneView = Player->CalcSceneView(&ViewFamily, CameraInfo.ViewpointLocation, CameraInfo.ViewpointRotation, Player->ViewportClient->Viewport);
 
     FViewMatrices& ViewMatrices = SceneView->ViewMatrices;
     // TODO: Check(SceneView)
@@ -154,40 +168,54 @@ void UUnrealNexusComponent::UpdateCameraView()
     
     CameraInfo.ModelView = CameraInfo.View * CameraInfo.Model;
     
-    // Composition of affine transformations so the det is always != 0, we can use InverseFast
-    CameraInfo.InvertedModelView = CameraInfo.ModelView.InverseFast(); 
+    CameraInfo.InvertedModelView = CameraInfo.ModelView.Inverse(); 
     
     CameraInfo.ModelViewProjection = CameraInfo.Projection * CameraInfo.View * CameraInfo.Model;
-    CameraInfo.InvertedModelViewProjection = CameraInfo.ModelViewProjection.InverseFast();
+    CameraInfo.InvertedModelViewProjection = CameraInfo.ModelViewProjection.Inverse();
 
     CameraInfo.ViewFrustum = SceneView->ViewFrustum;
 
-    FVector& ViewpointLocation = CameraInfo.ViewpointLocation;
+    for (auto& Plane : CameraInfo.ViewFrustum.Planes)
+    {
+        float PlaneNorm = FMath::Sqrt(Plane.X * Plane.X + Plane.Y * Plane.Y + Plane.Z * Plane.Z);
+        Plane *= 1.0f / PlaneNorm;
+    }
 
-    // WTF?
-    const auto& InvertedMvpMatrix = CameraInfo.InvertedModelViewProjection.M;
-    const float R3 = InvertedMvpMatrix[0][3] + InvertedMvpMatrix[3][3];
-    const float R0 = (InvertedMvpMatrix[0][0] + InvertedMvpMatrix[3][0]) / R3;
-    const float R1 = (InvertedMvpMatrix[0][1] + InvertedMvpMatrix[3][1]) / R3;
-    const float R2 = (InvertedMvpMatrix[0][2] + InvertedMvpMatrix[3][2]) / R3;
+    const FMatrix InverseModel = CameraInfo.Model.Inverse();
+    CameraInfo.ViewpointLocation = InverseModel.TransformPosition(FVector(0, 0, 0));
+    CameraInfo.ViewDirection = InverseModel.TransformPosition(FVector(0, 1, 0)) - CameraInfo.ViewpointLocation;
+    CameraInfo.ViewDirection *= 1.0f / CameraInfo.ViewDirection.SizeSquared();
 
-    // It's a point of what?
-    const float L3 = -InvertedMvpMatrix[0][3] + InvertedMvpMatrix[3][3];
-    const float L0 = (-InvertedMvpMatrix[0][0] + InvertedMvpMatrix[3][0]) / L3 - R0;
-    const float L1 = (-InvertedMvpMatrix[0][1] + InvertedMvpMatrix[3][1]) / L3 - R1;
-    const float L2 = (-InvertedMvpMatrix[0][2] + InvertedMvpMatrix[3][2]) / L3 - R2;
+    const FMatrix InvertedProjection = CameraInfo.Projection.Inverse();
+    const FVector SceneCenter = InvertedProjection.TransformPosition(FVector(0, 1, 0));
+    const FVector SceneSide = InvertedProjection.TransformPosition(FVector(1, 0, -1));
 
-    const float Side = FMath::Sqrt(L0 * L0 + L1 * L1 + L2 * L2);
-    const FVector SceneCenter {
-                        InvertedMvpMatrix[3][0] / InvertedMvpMatrix[3][3] - ViewpointLocation.X,
-                        InvertedMvpMatrix[3][1] / InvertedMvpMatrix[3][3] - ViewpointLocation.Y,
-                        InvertedMvpMatrix[3][2] / InvertedMvpMatrix[3][3] - ViewpointLocation.Z,
-    };
-    const float DistanceToCenter = SceneCenter.Size();
-    const int ViewportWidth = CameraInfo.Viewport->GetSizeXY().X;
-    const float ResolutionThisFrame = (2 * Side * DistanceToCenter) / ViewportWidth;
+    const float ZNear = SceneCenter.Size();
+    const float Side = (SceneSide - SceneCenter).Size();
+    const int ViewportWidth = CameraInfo.ViewportSize.X;
+    const float ResolutionThisFrame = (2 * Side / ZNear) / ViewportWidth;
     CameraInfo.IsUsingSameResolutionAsBefore = CameraInfo.CurrentResolution == ResolutionThisFrame;
     CameraInfo.CurrentResolution = ResolutionThisFrame;
+}
+
+void UUnrealNexusComponent::UpdateBodySetup()
+{
+    if (!BodySetup)
+        BodySetup = NewObject<UBodySetup>(this, UBodySetup::StaticClass());
+    
+	BodySetup->AggGeom.EmptyElements( );
+    const FVector BoxSize = FVector(ComponentBoundsRadius, ComponentBoundsRadius, ComponentBoundsRadius);
+    FKBoxElem& BoxElem = *new ( BodySetup->AggGeom.BoxElems ) FKBoxElem( BoxSize.X, BoxSize.Y, BoxSize.Z );
+    BoxElem.Center = GetComponentLocation();
+    BoxElem.Rotation = GetComponentRotation();
+
+    GetBodySetup()->ClearPhysicsMeshes();
+    GetBodySetup()->CreatePhysicsMeshes();
+    BodyInstance.SetResponseToAllChannels( ECR_Overlap );
+    BodyInstance.SetResponseToChannel( ECC_Camera, ECR_Ignore );
+    BodyInstance.SetResponseToChannel( ECC_Visibility, ECR_Block );
+    BodyInstance.SetInstanceNotifyRBCollision( true );
+    
 }
 
 bool UUnrealNexusComponent::IsNodeLoaded(const UINT32 NodeID) const
@@ -325,8 +353,6 @@ void UUnrealNexusComponent::PostEditChangeProperty(FPropertyChangedEvent& Proper
 
 void UUnrealNexusComponent::OnComponentCreated()
 {
-    if (NexusFile.IsEmpty()) return;
-    Open(NexusFile);
 }
 
 void UUnrealNexusComponent::BeginPlay()
@@ -334,6 +360,20 @@ void UUnrealNexusComponent::BeginPlay()
     Super::BeginPlay();
     if (NexusFile.IsEmpty()) return;
     Open(NexusFile);
+
+    if (bIsLoaded && Proxy)
+        Proxy->GetReady();
+}
+
+UBodySetup* UUnrealNexusComponent::GetBodySetup()
+{
+    return BodySetup;
+}
+
+FBoxSphereBounds UUnrealNexusComponent::CalcBounds(const FTransform& LocalToWorld) const
+{
+    const FBoxSphereBounds ComponentBounds = FBoxSphereBounds(FSphere(FVector::ZeroVector, ComponentBoundsRadius));
+    return ComponentBounds.TransformBy(LocalToWorld);
 }
 
 void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,

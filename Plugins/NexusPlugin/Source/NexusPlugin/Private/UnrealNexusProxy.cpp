@@ -1,6 +1,7 @@
 ﻿#include "UnrealNexusProxy.h"
 #include "NexusJobExecutorThread.h"
 #include "Animation/AnimCompress.h"
+#include "Materials/MaterialInstance.h"
 
 template <class T>
 FVertexBufferRHIRef CreateBufferAndFillWithData(const T* Data, const SIZE_T Size)
@@ -36,9 +37,9 @@ void FNexusNodeRenderData::CreateIndexBuffer(Signature& Sig, Node& Node,  nx::No
     uint16* FaceIndices = Data.faces(Sig, Node.nvert);
     for (int i = 0; i < Node.nface; i++)
     {
-        Indices[i * 3 + (WindingOrder == EWindingOrder::Clockwise ? 0 : 2)] = FaceIndices[i * 3 + 0];
+        Indices[i * 3 + 0] = FaceIndices[i * 3 + 0];
         Indices[i * 3 + 1] = FaceIndices[i * 3 + 1];
-        Indices[i * 3 + (WindingOrder == EWindingOrder::Clockwise ? 2 : 0)] = FaceIndices[i * 3 + 2];
+        Indices[i * 3 + 2] = FaceIndices[i * 3 + 2];
     }
 
     FRHIResourceCreateInfo Info;
@@ -57,7 +58,7 @@ void FNexusNodeRenderData::CreatePositionBuffer(nx::Node& Node, nx::NodeData& Da
     for (int i = 0; i < Node.nvert; i++)
     {
         vcg::Point3f Point = Data.coords()[i];
-        const FVector Vertex{ Point.X(), Point.Y(), Point.Z() };
+        const FVector Vertex{ Point.X(), Point.Z(), Point.Y()  };
         Vertices[i] = Vertex;
     }
 
@@ -279,7 +280,7 @@ void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
     LastTraversalData = InTraversalData;
     if (this->PendingCount >= this->MaxPending)
         return;
-
+    
 
     const auto OptionalBestNode = FindBestNode();
     if (!OptionalBestNode)
@@ -318,6 +319,9 @@ const int InMaxCacheSize)
     JobExecutor = new FNexusJobExecutorThread(ComponentData->file);
     JobThread = FRunnableThread::Create(JobExecutor, TEXT("Nexus Node Loader"));
     SetWireframeColor(FLinearColor::Green);
+
+    MaterialProxy = Component->ModelMaterial == nullptr ?
+                    UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy() : Component->ModelMaterial->GetRenderProxy();
 }
 
 FUnrealNexusProxy::~FUnrealNexusProxy()
@@ -358,18 +362,13 @@ void FUnrealNexusProxy::DropGPUData(uint32 N)
     });
 }
 
-int32 FUnrealNexusProxy::CollectOccluderElements(FOccluderElementsCollector& Collector) const
-{
-    return 0;
-}
 
 bool FUnrealNexusProxy::CanBeOccluded() const
 {
-    // TODO: For now
-    return false;
+    return true;
 }
 
-void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, FMeshElementCollector& Collector, const FEngineShowFlags& EngineShowFlags) const
+void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* View, FMeshElementCollector& Collector, const FEngineShowFlags& EngineShowFlags) const
 {
     int RenderedCount = 0;
     const TSet<UINT32>& SelectedNodes = LastTraversalData.SelectedNodes;
@@ -408,13 +407,33 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, FMeshElementCollector
             
             if (EndIndex > Offset)
             {
+                const bool bIsWireframeView = AllowDebugViewmodes() && View->Family->EngineShowFlags.Wireframe;
+
                 FMeshBatch& Mesh = Collector.AllocateMesh();
-                Mesh.bWireframe = EngineShowFlags.Wireframe;
+                Mesh.bWireframe = false;
                 Mesh.VertexFactory = &Data->NodeVertexFactory;
                 Mesh.Type = PT_TriangleList;
                 Mesh.DepthPriorityGroup = SDPG_World;
-                Mesh.MaterialRenderProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy();
                 Mesh.bUseAsOccluder = true;
+                Mesh.ReverseCulling = IsLocalToWorldDeterminantNegative();
+                if (bIsWireframeView)
+                {
+                    const auto WireframeMaterialInstance = new FColoredMaterialRenderProxy(
+                        GEngine->WireframeMaterial ? GEngine->WireframeMaterial->GetRenderProxy() : nullptr,
+                        FLinearColor(0, 0.5f, 1.f)
+                        );
+
+                    Collector.RegisterOneFrameMaterialProxy(WireframeMaterialInstance);
+
+                    Mesh.MaterialRenderProxy = WireframeMaterialInstance;
+
+                    Mesh.bWireframe = true;
+                    Mesh.bCanApplyViewModeOverrides = false;
+                }
+                else
+                {
+                    Mesh.MaterialRenderProxy = MaterialProxy;
+                }
     
                 auto& Element = Mesh.Elements[0];
                 Element.IndexBuffer = &Data->IndexBuffer;
@@ -433,6 +452,7 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, FMeshElementCollector
 void FUnrealNexusProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views,
                                                const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
 {
+    if(!bIsReady) return;
     for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
     {
 
@@ -445,7 +465,7 @@ void FUnrealNexusProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& 
          */
         if (!(VisibilityMap & (1 << ViewIndex))) continue;
 
-        DrawEdgeNodes(ViewIndex, Collector, EngineShowFlags);
+        DrawEdgeNodes(ViewIndex, Views[ViewIndex], Collector, EngineShowFlags);
 
 #if 0
         for (const auto& NodeIndexAndRenderingData : LoadedMeshData) 
@@ -473,7 +493,8 @@ FPrimitiveViewRelevance FUnrealNexusProxy::GetViewRelevance(const FSceneView* Vi
     // Partially copied from StaticMeshRenderer.cpp
     FPrimitiveViewRelevance Result;
     Result.bOpaque = true;
-    Result.bDrawRelevance = true;
+    Result.bDrawRelevance = IsShown(View);
+    Result.bShadowRelevance = IsShadowCast(View);
     Result.bRenderInMainPass = true;
     Result.bVelocityRelevance = IsMovable() && Result.bOpaque && Result.bRenderInMainPass;
     Result.bDynamicRelevance = true;

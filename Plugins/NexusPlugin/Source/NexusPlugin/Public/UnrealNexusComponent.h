@@ -17,7 +17,7 @@ enum class ENodeStatus
 
 struct FCameraInfo
 {
-    FViewport* Viewport;
+    FVector2D ViewportSize;
     FVector ViewpointLocation; // Viewport
     FRotator ViewpointRotation;
     FMatrix Model;
@@ -28,6 +28,7 @@ struct FCameraInfo
     FConvexVolume ViewFrustum;
     float CurrentResolution;
     bool IsUsingSameResolutionAsBefore;
+    FVector4 ViewDirection;
 };
 
 struct FTraversalElement
@@ -39,7 +40,7 @@ struct FTraversalElement
 
 struct FTraversalData
 {
-    
+    FVector ComponentLocation;
     TArray<FTraversalElement> TraversalQueue;
     TSet<UINT32> BlockedNodes, SelectedNodes, VisitedNodes;
     TArray<float> InstanceErrors;
@@ -70,19 +71,21 @@ private:
     int CurrentDrawBudget = 0;
     float CurrentError = 0.0f;
 
+    float ComponentBoundsRadius = 0.0f;
+
     // An outer node is a node outside the view frustum
     // This is done to reduce the weight of outer nodes,
     // while being consistent with the tree
     const float Outer_Node_Factor = 100.0f;
     TArray<float> CalculatedErrors;
+    UBodySetup* BodySetup = nullptr;
 
 
     float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
     float CalculateErrorForNode(const UINT32 NodeID, bool UseTight) const;
-
     void UpdateRemainingErrors(TArray<float>& InstanceErrors);
-    
     void UpdateCameraView();
+    void UpdateBodySetup();
     
 protected:
     FUnrealNexusData* ComponentData = new FUnrealNexusData();
@@ -106,7 +109,8 @@ protected:
     virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
     virtual void OnComponentCreated() override;
     virtual void BeginPlay() override;
-    
+    virtual UBodySetup* GetBodySetup() override;
+    virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 public:
     explicit UUnrealNexusComponent(const FObjectInitializer& Initializer);
     ~UUnrealNexusComponent();
@@ -132,13 +136,17 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0"))
     float RootNodesInitialError = 1e20;
+    
     UPROPERTY(EditAnywhere)
     EWindingOrder WindingOrder = EWindingOrder::Counter_Clockwise;
+
+    UPROPERTY(EditAnywhere)
+    class UMaterialInterface* ModelMaterial = nullptr;
     /*
     UFUNCTION(BlueprintCallable)
     bool IsStreaming();
     */
-
+    virtual void GetUsedMaterials(TArray <UMaterialInterface *> & OutMaterials, bool bGetDebugMaterials) const override;
     virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
     bool IsNodeLoaded(UINT32 NodeID) const;
     void SetNodeStatus(UINT32 NodeID, ENodeStatus NewStatus);
