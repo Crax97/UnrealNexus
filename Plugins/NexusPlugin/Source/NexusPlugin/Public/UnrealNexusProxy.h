@@ -16,6 +16,7 @@ public:
     void CreatePositionBuffer(nx::Node& Node, nx::NodeData& Data);
     void CreateIndexBuffer(Signature& Sig, Node& Node, nx::NodeData& Data, EWindingOrder WindingOrder);
     void InitTexBuffer(const FUnrealNexusProxy* Proxy, Signature& TheSig, NodeData& Data, Node& Node);
+    static void CalculateTangents(TArray<FPackedNormal>& OutTangents, Signature& TheSig,  NodeData& Data, Node& Node);
     void InitTangentsBuffer(const FUnrealNexusProxy* Proxy, Signature& TheSig, NodeData& Data, Node& Node);
     void InitVertexFactory();
     ~FNexusNodeRenderData();

@@ -88,19 +88,84 @@ void FNexusNodeRenderData::InitTexBuffer(const FUnrealNexusProxy* Proxy, Signatu
     BeginInitResource(&TexCoordsBuffer);
 }
 
+void FNexusNodeRenderData::CalculateTangents(TArray<FPackedNormal>& OutTangents, Signature& TheSig,  NodeData& Data, Node& Node)
+{
+    TArray<FVector> Tang1;
+    TArray<FVector> Tang2;
+
+    Tang1.SetNum(Node.nvert);
+    Tang2.SetNum(Node.nvert);
+    vcg::Point3f* Vertices = Data.coords();
+    vcg::Point3s* Normals = Data.normals(TheSig, Node.nvert);
+    vcg::Point2f* TexCoords = Data.texCoords(TheSig, Node.nvert);
+    uint16* Indices = Data.faces(TheSig, Node.nvert);
+
+    for (uint32 Index = 0; Index < Node.nface; Index += 3)
+    {
+        uint32 Index1 = Indices[Index * 3 + 0];
+        uint32 Index2 = Indices[Index * 3 + 1];
+        uint32 Index3 = Indices[Index * 3 + 2];
+        vcg::Point3f Vertex1 =  Vertices[Index1];
+        vcg::Point3f Vertex2 =  Vertices[Index2];
+        vcg::Point3f Vertex3 =  Vertices[Index3];
+        
+        vcg::Point2f TexCoord1 =  TexCoords[Index1];
+        vcg::Point2f TexCoord2 =  TexCoords[Index2];
+        vcg::Point2f TexCoord3 =  TexCoords[Index3];
+
+        float X1 = Vertex2.X() - Vertex1.X();
+        float X2 = Vertex3.X() - Vertex1.X();
+        float Y1 = Vertex2.Y() - Vertex1.Y();
+        float Y2 = Vertex3.Y() - Vertex1.Y();
+        float Z1 = Vertex2.Z() - Vertex1.Z();
+        float Z2 = Vertex3.Z() - Vertex1.Z();
+        
+        float S1 = TexCoord2.X() - TexCoord1.X();
+        float S2 = TexCoord3.X() - TexCoord1.X();
+        float T1 = TexCoord2.Y() - TexCoord1.Y();
+        float T2 = TexCoord3.Y() - TexCoord1.Y();
+
+        float R = 1.0f / (S1 * T2 - S2 * T1);
+
+        // TODO Invert Y and Z
+        FVector SDir = FVector((T2 * X1 - T1 * X2), (T2 * Y1 - T1* Y2), (T2 * Z1 - T1 * Z2)) * R;
+        FVector TDir = FVector((S1 * X2 - S2 * X1), (S1* Y2 - S2 * Y1), (S1 * Z2 - S2 * Z1)) * R;
+
+        Tang1[Index1] += SDir;
+        Tang1[Index2] += SDir;
+        Tang1[Index3] += SDir;
+        
+        Tang2[Index1] += TDir;
+        Tang2[Index2] += TDir;
+        Tang2[Index3] += TDir;
+    }
+
+    auto Point3SToVector = [](const vcg::Point3s Point)
+    {
+        return FVector(Point.X(), Point.Y(), Point.Z());
+    };
+    
+    for (uint32 Index = 0; Index < Node.nvert; Index ++)
+    {
+        FVector Normal = Point3SToVector(Normals[Index]);
+        FVector& Tangent = Tang1[Index];
+        
+        FVector Calculated = (Tangent - Normal * FVector::DotProduct(Normal, Tangent)).GetSafeNormal();
+        float W = (FVector::DotProduct(FVector::CrossProduct(Normal, Tangent), Tang2[Index])) < 0.0f ? -1.0f : 1.0f;
+        
+        OutTangents[Index * 2 + 0] = FPackedNormal(FVector4(Calculated, W));
+        OutTangents[Index * 2 + 1] = FPackedNormal(FVector4(FVector::CrossProduct(Calculated, Normal), W));
+    }
+}
+
 void FNexusNodeRenderData::InitTangentsBuffer(const FUnrealNexusProxy* Proxy, Signature& TheSig, NodeData& Data, Node& Node)
 {
+
     TArray<FPackedNormal> Tangents;
     Tangents.SetNum(Node.nvert * 2);
-    for (int i = 0; i < Node.nvert; i++)
-    {
-        // TODO: Actually calculate tangents
-        vcg::Point3s Normal = Data.normals(TheSig, Node.nvert)[i];
-        Tangents[i * 2 + 0] = (FPackedNormal{ FVector{static_cast<float>(Normal.X()), static_cast<float>(Normal.Y()), static_cast<float>(Normal.Z())} });
-        Tangents[i * 2 + 1] = (FPackedNormal{ FVector{static_cast<float>(Normal.X()), static_cast<float>(Normal.Y()), static_cast<float>(Normal.Z())} });
-    }
+    CalculateTangents(Tangents, TheSig, Data, Node);
     TangentBuffer.VertexBufferRHI = CreateBufferAndFillWithData<void>(Tangents.GetData(), Node.nvert * 2 * sizeof(FPackedNormal));
-    TangentBuffer.ShaderResourceViewRHI = RHICreateShaderResourceView(FShaderResourceViewInitializer(TangentBuffer.VertexBufferRHI, PF_R32_FLOAT));
+    TangentBuffer.ShaderResourceViewRHI = RHICreateShaderResourceView(FShaderResourceViewInitializer(TangentBuffer.VertexBufferRHI, PF_R8G8B8A8_SNORM));
     BeginInitResource(&TangentBuffer);
 }
 
@@ -140,14 +205,14 @@ void FNexusNodeRenderData::InitVertexFactory()
             Data.TextureCoordinatesSRV = Params.TexCoordsBuffer->ShaderResourceViewRHI;
 
             Data.TangentBasisComponents[0] = FVertexStreamComponent(
-                Params.TexCoordsBuffer,
+                Params.TangentBuffer,
                 0,
                 2 * sizeof(FPackedNormal),
                 VET_PackedNormal
             );
 
             Data.TangentBasisComponents[1] = FVertexStreamComponent(
-                Params.TexCoordsBuffer,
+                Params.TangentBuffer,
                 sizeof(FPackedNormal),
                 2 * sizeof(FPackedNormal),
                 VET_PackedNormal
@@ -160,6 +225,9 @@ void FNexusNodeRenderData::InitVertexFactory()
                 sizeof(FVector2D),
                 VET_Float2
             );
+        
+            Data.LightMapCoordinateIndex = 0;
+            Data.NumTexCoords = 1;
 
             FColorVertexBuffer::BindDefaultColorVertexBuffer(Params.VertexFactory, Data, FColorVertexBuffer::NullBindStride::FColorSizeForComponentOverride);
             Params.VertexFactory->SetData(Data);

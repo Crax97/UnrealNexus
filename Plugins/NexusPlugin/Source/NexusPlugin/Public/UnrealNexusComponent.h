@@ -71,7 +71,8 @@ private:
     int CurrentDrawBudget = 0;
     float CurrentError = 0.0f;
 
-    float ComponentBoundsRadius = 0.0f;
+    // TODO: Load first node and calculate Radius based on that
+    float ComponentBoundsRadius = 1000.0f;
 
     // An outer node is a node outside the view frustum
     // This is done to reduce the weight of outer nodes,
