@@ -90,71 +90,75 @@ void FNexusNodeRenderData::InitTexBuffer(const FUnrealNexusProxy* Proxy, Signatu
 
 void FNexusNodeRenderData::CalculateTangents(TArray<FPackedNormal>& OutTangents, Signature& TheSig,  NodeData& Data, Node& Node)
 {
-    TArray<FVector> Tang1;
-    TArray<FVector> Tang2;
-
-    Tang1.SetNum(Node.nvert);
-    Tang2.SetNum(Node.nvert);
+    TArray<FVector> T;
+    TArray<FVector> TSums;
+    TArray<int> Counts;
+    
+    Counts.SetNum(Node.nvert);
+    T.SetNum(Node.nface);
+    TSums.SetNum(Node.nvert);
+    
     vcg::Point3f* Vertices = Data.coords();
     vcg::Point3s* Normals = Data.normals(TheSig, Node.nvert);
     vcg::Point2f* TexCoords = Data.texCoords(TheSig, Node.nvert);
     uint16* Indices = Data.faces(TheSig, Node.nvert);
 
+    auto Point3SToVector = [](const vcg::Point3s Point) -> FVector
+    {
+        return FVector(Point.X(), Point.Z(), Point.Y());
+    };
+    
+    auto Point3FToVector = [](const vcg::Point3f Point) -> FVector
+    {
+        return FVector(Point.X(), Point.Z(), Point.Y());
+    };
+    
+    auto Point2FToVector = [](const vcg::Point2f Point) -> FVector2D
+    {
+        return FVector2D(Point.X(), Point.Y());
+    };
+    
+    // Step 1: Find per-face T Vectors
     for (uint32 Index = 0; Index < Node.nface; Index += 3)
     {
-        uint32 Index1 = Indices[Index * 3 + 0];
-        uint32 Index2 = Indices[Index * 3 + 1];
-        uint32 Index3 = Indices[Index * 3 + 2];
-        vcg::Point3f Vertex1 =  Vertices[Index1];
-        vcg::Point3f Vertex2 =  Vertices[Index2];
-        vcg::Point3f Vertex3 =  Vertices[Index3];
+        const uint32 Index1 = Indices[Index * 3 + 0];
+        const uint32 Index2 = Indices[Index * 3 + 1];
+        const uint32 Index3 = Indices[Index * 3 + 2];
+
+        Counts[Index1] ++;
+        Counts[Index2] ++;
+        Counts[Index3] ++;
         
-        vcg::Point2f TexCoord1 =  TexCoords[Index1];
-        vcg::Point2f TexCoord2 =  TexCoords[Index2];
-        vcg::Point2f TexCoord3 =  TexCoords[Index3];
-
-        float X1 = Vertex2.X() - Vertex1.X();
-        float X2 = Vertex3.X() - Vertex1.X();
-        float Y1 = Vertex2.Y() - Vertex1.Y();
-        float Y2 = Vertex3.Y() - Vertex1.Y();
-        float Z1 = Vertex2.Z() - Vertex1.Z();
-        float Z2 = Vertex3.Z() - Vertex1.Z();
+        FVector Vertex1 =  Point3FToVector(Vertices[Index1]);
+        FVector Vertex2 =  Point3FToVector(Vertices[Index2]);
+        FVector Vertex3 =  Point3FToVector(Vertices[Index3]);
         
-        float S1 = TexCoord2.X() - TexCoord1.X();
-        float S2 = TexCoord3.X() - TexCoord1.X();
-        float T1 = TexCoord2.Y() - TexCoord1.Y();
-        float T2 = TexCoord3.Y() - TexCoord1.Y();
+        FVector2D TexCoord1 =  Point2FToVector(TexCoords[Index1]);
+        FVector2D TexCoord2 =  Point2FToVector(TexCoords[Index2]);
+        FVector2D TexCoord3 =  Point2FToVector(TexCoords[Index3]);
 
-        float R = 1.0f / (S1 * T2 - S2 * T1);
+        FVector Edge21 = Vertex2 - Vertex1;
+        FVector Edge31 = Vertex3 - Vertex1;
 
-        // TODO Invert Y and Z
-        FVector SDir = FVector((T2 * X1 - T1 * X2), (T2 * Y1 - T1* Y2), (T2 * Z1 - T1 * Z2)) * R;
-        FVector TDir = FVector((S1 * X2 - S2 * X1), (S1* Y2 - S2 * Y1), (S1 * Z2 - S2 * Z1)) * R;
-
-        Tang1[Index1] += SDir;
-        Tang1[Index2] += SDir;
-        Tang1[Index3] += SDir;
+        const FVector2D TexEdge21 = TexCoord2 - TexCoord1;
+        const FVector2D TexEdge31 = TexCoord3 - TexCoord1;
         
-        Tang2[Index1] += TDir;
-        Tang2[Index2] += TDir;
-        Tang2[Index3] += TDir;
+        T[Index] = (TexEdge21.Y != 0.0f ? Edge21 / TexEdge21.Y : Edge31 / TexEdge31.Y).GetSafeNormal();
+        
+        TSums[Index1] += T[Index];
+        TSums[Index2] += T[Index];
+        TSums[Index3] += T[Index];
+
+        Counts[Index1] ++;
+        Counts[Index2] ++;
+        Counts[Index3] ++;
     }
-
-    auto Point3SToVector = [](const vcg::Point3s Point)
-    {
-        return FVector(Point.X(), Point.Y(), Point.Z());
-    };
     
     for (uint32 Index = 0; Index < Node.nvert; Index ++)
     {
-        FVector Normal = Point3SToVector(Normals[Index]);
-        FVector& Tangent = Tang1[Index];
-        
-        FVector Calculated = (Tangent - Normal * FVector::DotProduct(Normal, Tangent)).GetSafeNormal();
-        float W = (FVector::DotProduct(FVector::CrossProduct(Normal, Tangent), Tang2[Index])) < 0.0f ? -1.0f : 1.0f;
-        
-        OutTangents[Index * 2 + 0] = FPackedNormal(FVector4(Calculated, W));
-        OutTangents[Index * 2 + 1] = FPackedNormal(FVector4(FVector::CrossProduct(Calculated, Normal), W));
+        FVector CalculatedTangentPerVertex = TSums[Index] / Counts[Index];
+        OutTangents[Index * 2 + 0] = FPackedNormal(CalculatedTangentPerVertex);
+        OutTangents[Index * 2 + 1] = FPackedNormal(Point3SToVector(Normals[Index]));
     }
 }
 
