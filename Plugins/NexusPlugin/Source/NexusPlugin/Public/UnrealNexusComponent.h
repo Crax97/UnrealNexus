@@ -108,9 +108,8 @@ protected:
     void AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked);
     
     virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-    virtual void OnComponentCreated() override;
     virtual void BeginPlay() override;
-    virtual UBodySetup* GetBodySetup() override;
+    virtual void OnRegister() override;
     virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 public:
     explicit UUnrealNexusComponent(const FObjectInitializer& Initializer);
@@ -147,6 +146,7 @@ public:
     UFUNCTION(BlueprintCallable)
     bool IsStreaming();
     */
+    
     virtual void GetUsedMaterials(TArray <UMaterialInterface *> & OutMaterials, bool bGetDebugMaterials) const override;
     virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
     bool IsNodeLoaded(UINT32 NodeID) const;

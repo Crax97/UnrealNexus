@@ -4,9 +4,10 @@
 #include "UnrealNexusProxy.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/LocalPlayer.h"
+#include "DrawDebugHelpers.h"
 
 // One unit in Unreal is 100cms
-constexpr float GUnrealScaleConversion = 100.0f;
+constexpr float GUnrealScaleConversion = 1.0f;
 
 struct FNodeComparator
 {
@@ -21,6 +22,7 @@ UUnrealNexusComponent::UUnrealNexusComponent(const FObjectInitializer& Initializ
 {
     PrimaryComponentTick.bCanEverTick = true;
     PrimaryComponentTick.SetTickFunctionEnable(true);
+    bWantsInitializeComponent = true;
 }
 
 UUnrealNexusComponent::~UUnrealNexusComponent()
@@ -55,13 +57,7 @@ bool UUnrealNexusComponent::Open(const FString& Source)
         return false;
     }
     CalculatedErrors.SetNum(ComponentData->header.n_nodes);
-    for (UINT32 RootId = 0; RootId < ComponentData->nroots; RootId++)
-    {
-        Node& RootNode = ComponentData->nodes[RootId];
-        RootNode.error = RootNodesInitialError * RootNode.tight_radius;
-    }
     ComponentBoundsRadius = ComponentData->boundingSphere().Radius() * GUnrealScaleConversion;
-    UpdateBodySetup();
     return true;
 }
 
@@ -80,15 +76,15 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
     Node& SelectedNode = ComponentData->nodes[NodeID];
     vcg::Sphere3f& NodeBoundingSphere = SelectedNode.sphere;
     const FVector Viewpoint = CameraInfo.ViewpointLocation;
-    
+
+    const float SphereRadius = UseTight ? SelectedNode.tight_radius : NodeBoundingSphere.Radius();
     vcg::Point3f BoundingSphereCenter = NodeBoundingSphere.Center();
     const FVector ViewpointToBoundingSphere { Viewpoint.X - BoundingSphereCenter.X(),
-                                                    Viewpoint.Y - BoundingSphereCenter.Y(),
-                                                    Viewpoint.Z - BoundingSphereCenter.Z()};
-    const float ViewpointDistanceToBoundingSphere = FMath::Max(ViewpointToBoundingSphere.Size(), 0.1f);
+                                                    -Viewpoint.Z + BoundingSphereCenter.Y(),
+                                                    Viewpoint.Y - BoundingSphereCenter.Z()};
+    const float ViewpointDistanceToBoundingSphere = FMath::Max(ViewpointToBoundingSphere.Size(), 0.1f) - SphereRadius;
     float CalculatedError = SelectedNode.error / (CameraInfo.CurrentResolution * ViewpointDistanceToBoundingSphere);
     
-    const float SphereRadius = UseTight ? SelectedNode.tight_radius : NodeBoundingSphere.Radius();
     const float BoundingSphereDistanceFromViewFrustum = CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SelectedNode.tight_radius);
 
     if (BoundingSphereDistanceFromViewFrustum < -SphereRadius)
@@ -111,8 +107,8 @@ float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg:
     {
         const FPlane CurrentPlane = ViewPlanes[i];
         const float Distance =  CurrentPlane.X * SphereCenter.X() +
-                                CurrentPlane.Y * SphereCenter.Y() +
-                                CurrentPlane.Z * SphereCenter.Z() +
+                                CurrentPlane.Z * SphereCenter.Y() +
+                                CurrentPlane.Y * SphereCenter.Z() +
                                 SphereTightRadius;
         if (Distance < MinDistance)
         {
@@ -152,70 +148,65 @@ void UUnrealNexusComponent::UpdateCameraView()
     // TODO: Remove hardcoded player index
     // TODO: Check for Viewport, ViewportClient and Player
     ULocalPlayer* Player = GetWorld()->GetFirstLocalPlayerFromController();
-    CameraInfo.ViewportSize = Player->ViewportClient->Viewport->GetSizeXY();
+    APlayerController* FirstController = GetWorld()->GetFirstPlayerController();
+
+    
+    const auto Viewport = Player->ViewportClient->Viewport;
     FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(
-        Player->ViewportClient->Viewport,
+        Viewport,
         GetWorld()->Scene,
         Player->ViewportClient->EngineShowFlags)
         .SetRealtimeUpdate(true));
-    FSceneView* SceneView = Player->CalcSceneView(&ViewFamily, CameraInfo.ViewpointLocation, CameraInfo.ViewpointRotation, Player->ViewportClient->Viewport);
+    FSceneView* SceneView = Player->CalcSceneView(&ViewFamily, CameraInfo.ViewpointLocation, CameraInfo.ViewpointRotation, Viewport);
 
+    CameraInfo.ViewportSize = Viewport->GetSizeXY();
+    
+    
     FViewMatrices& ViewMatrices = SceneView->ViewMatrices;
     // TODO: Check(SceneView)
-    CameraInfo.Model = GetComponentTransform().ToMatrixWithScale();
+    CameraInfo.Model = GetComponentTransform().ToMatrixNoScale().GetTransposed();
     CameraInfo.View = ViewMatrices.GetViewMatrix();
     CameraInfo.Projection = ViewMatrices.GetProjectionMatrix();
     
-    CameraInfo.ModelView = CameraInfo.View * CameraInfo.Model;
-    
+    CameraInfo.ModelView = CameraInfo.Model * CameraInfo.View;
     CameraInfo.InvertedModelView = CameraInfo.ModelView.Inverse(); 
     
-    CameraInfo.ModelViewProjection = CameraInfo.Projection * CameraInfo.View * CameraInfo.Model;
+    CameraInfo.ModelViewProjection = CameraInfo.Model * CameraInfo.View * CameraInfo.Projection;
     CameraInfo.InvertedModelViewProjection = CameraInfo.ModelViewProjection.Inverse();
 
     CameraInfo.ViewFrustum = SceneView->ViewFrustum;
+    CameraInfo.ViewpointLocation = SceneView->ViewLocation;
+    DrawDebugBox(GetWorld(), CameraInfo.ViewpointLocation, FVector(10.0f), FQuat::Identity, FColor::Purple);
 
-    for (auto& Plane : CameraInfo.ViewFrustum.Planes)
-    {
-        float PlaneNorm = FMath::Sqrt(Plane.X * Plane.X + Plane.Y * Plane.Y + Plane.Z * Plane.Z);
-        Plane *= 1.0f / PlaneNorm;
-    }
+    FVector ScreenMiddle, ScreenLeft, ScreenRight;
+    FVector ScreenMiddleDir, ScreenLeftDir, ScreenRightDir;
+    FirstController->DeprojectScreenPositionToWorld(CameraInfo.ViewportSize.X / 2, CameraInfo.ViewportSize.Y / 2, ScreenMiddle, ScreenMiddleDir);
+    FirstController->DeprojectScreenPositionToWorld(0, CameraInfo.ViewportSize.Y / 2, ScreenLeft, ScreenLeftDir);
+    FirstController->DeprojectScreenPositionToWorld(CameraInfo.ViewportSize.X, CameraInfo.ViewportSize.Y / 2, ScreenRight, ScreenRightDir);
 
-    const FMatrix InverseModel = CameraInfo.Model.Inverse();
-    CameraInfo.ViewpointLocation = InverseModel.TransformPosition(FVector(0, 0, 0));
-    CameraInfo.ViewDirection = InverseModel.TransformPosition(FVector(0, 1, 0)) - CameraInfo.ViewpointLocation;
-    CameraInfo.ViewDirection *= 1.0f / CameraInfo.ViewDirection.SizeSquared();
-
-    const FMatrix InvertedProjection = CameraInfo.Projection.Inverse();
-    const FVector SceneCenter = InvertedProjection.TransformPosition(FVector(0, 1, 0));
-    const FVector SceneSide = InvertedProjection.TransformPosition(FVector(1, 0, -1));
-
-    const float ZNear = SceneCenter.Size();
-    const float Side = (SceneSide - SceneCenter).Size();
+    DrawDebugPoint(GetWorld(), ScreenLeft, 20.0f, FColor::Green);
+    DrawDebugPoint(GetWorld(), ScreenMiddle, 20.0f, FColor::White);
+    DrawDebugPoint(GetWorld(), ScreenRight, 20.0f, FColor::Red);
+    const float SideLengthWorldSpace = (ScreenRight - ScreenLeft).Size();
+   
+    const float DistanceToCenter = (CameraInfo.ViewpointLocation - ScreenMiddle).Size();
     const int ViewportWidth = CameraInfo.ViewportSize.X;
-    const float ResolutionThisFrame = (2 * Side / ZNear) / ViewportWidth;
+    const float ResolutionThisFrame = (2 * SideLengthWorldSpace / DistanceToCenter) / ViewportWidth;
+
+    
+    for (UINT32 i = 0; i < 5; i ++)
+    {
+        FPlane& Current = CameraInfo.ViewFrustum.Planes[i];
+        Current = Current.Flip();
+        const float Length = FMath::Sqrt(Current.X * Current.X + Current.Z * Current.Z + Current.Y * Current.Y);
+        Current.X /= Length;
+        Current.Y /= Length;
+        Current.Z /= Length;
+        Current.W /= Length;
+        Swap(Current.Y, Current.Z);
+    }
     CameraInfo.IsUsingSameResolutionAsBefore = CameraInfo.CurrentResolution == ResolutionThisFrame;
     CameraInfo.CurrentResolution = ResolutionThisFrame;
-}
-
-void UUnrealNexusComponent::UpdateBodySetup()
-{
-    if (!BodySetup)
-        BodySetup = NewObject<UBodySetup>(this, UBodySetup::StaticClass());
-    
-	BodySetup->AggGeom.EmptyElements( );
-    const FVector BoxSize = FVector(ComponentBoundsRadius, ComponentBoundsRadius, ComponentBoundsRadius);
-    FKBoxElem& BoxElem = *new ( BodySetup->AggGeom.BoxElems ) FKBoxElem( BoxSize.X, BoxSize.Y, BoxSize.Z );
-    BoxElem.Center = GetComponentLocation();
-    BoxElem.Rotation = GetComponentRotation();
-
-    GetBodySetup()->ClearPhysicsMeshes();
-    GetBodySetup()->CreatePhysicsMeshes();
-    BodyInstance.SetResponseToAllChannels( ECR_Overlap );
-    BodyInstance.SetResponseToChannel( ECC_Camera, ECR_Ignore );
-    BodyInstance.SetResponseToChannel( ECC_Visibility, ECR_Block );
-    BodyInstance.SetInstanceNotifyRBCollision( true );
-    
 }
 
 bool UUnrealNexusComponent::IsNodeLoaded(const UINT32 NodeID) const
@@ -351,23 +342,28 @@ void UUnrealNexusComponent::PostEditChangeProperty(FPropertyChangedEvent& Proper
     }
 }
 
-void UUnrealNexusComponent::OnComponentCreated()
-{
-}
 
 void UUnrealNexusComponent::BeginPlay()
 {
     Super::BeginPlay();
-    if (NexusFile.IsEmpty()) return;
-    Open(NexusFile);
 
     if (bIsLoaded && Proxy)
         Proxy->GetReady();
 }
 
-UBodySetup* UUnrealNexusComponent::GetBodySetup()
+
+void UUnrealNexusComponent::OnRegister()
 {
-    return BodySetup;
+    Super::OnRegister();
+    if (!NexusFile.IsEmpty())
+    {
+        Open(NexusFile);
+        if (bIsLoaded)
+        {
+            ComponentData->LoadIntoRam(0);
+            SetNodeStatus(0, ENodeStatus::Loaded);
+        }
+    }
 }
 
 FBoxSphereBounds UUnrealNexusComponent::CalcBounds(const FTransform& LocalToWorld) const
