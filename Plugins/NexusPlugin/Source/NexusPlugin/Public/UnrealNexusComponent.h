@@ -73,7 +73,6 @@ private:
     // while being consistent with the tree
     const float Outer_Node_Factor = 100.0f;
     TArray<float> CalculatedErrors;
-    UBodySetup* BodySetup = nullptr;
 
 
     float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
@@ -134,6 +133,9 @@ public:
     
     UPROPERTY(EditAnywhere)
     EWindingOrder WindingOrder = EWindingOrder::Counter_Clockwise;
+
+    UPROPERTY(EditAnywhere)
+    bool bShowDebugStuff = false;
 
     UPROPERTY(EditAnywhere)
     class UMaterialInterface* ModelMaterial = nullptr;

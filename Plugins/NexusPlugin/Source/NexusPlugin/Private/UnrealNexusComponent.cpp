@@ -78,7 +78,7 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
     const FVector Viewpoint = CameraInfo.ViewpointLocation;
 
     const float SphereRadius = UseTight ? SelectedNode.tight_radius : NodeBoundingSphere.Radius();
-    const FVector BoundingSphereCenter = GetComponentTransform().TransformPosition(VcgPoint3FToVector(NodeBoundingSphere.Center()));
+    const FVector BoundingSphereCenter = VcgPoint3FToVector(NodeBoundingSphere.Center());
     const FVector ViewpointToBoundingSphere = FVector( Viewpoint.X - BoundingSphereCenter.X,
                                                     Viewpoint.Y - BoundingSphereCenter.Y,
                                                     Viewpoint.Z - BoundingSphereCenter.Z);
@@ -102,7 +102,7 @@ float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg:
     float MinDistance = 1e20;
     const FConvexVolume& ViewFrustum = CameraInfo.ViewFrustum;
     const FConvexVolume::FPlaneArray& ViewPlanes = ViewFrustum.Planes;
-    const FVector SphereCenter = GetComponentTransform().TransformPosition(VcgPoint3FToVector(Sphere.Center()));
+    const FVector SphereCenter = VcgPoint3FToVector(Sphere.Center());
     for (UINT32 i = 0; i < 5; i ++)
     {
         const FPlane CurrentPlane = ViewPlanes[i];
@@ -157,14 +157,11 @@ void UUnrealNexusComponent::UpdateCameraView()
     FSceneView* SceneView = Player->CalcSceneView(&ViewFamily, CameraInfo.ViewpointLocation, CameraInfo.ViewpointRotation, Viewport);
 
     CameraInfo.ViewportSize = Viewport->GetSizeXY();
-    
-    
-    FViewMatrices& ViewMatrices = SceneView->ViewMatrices;
+    const auto WorldToModelMatrix = GetComponentTransform().ToInverseMatrixWithScale();
     // TODO: Check(SceneView)
 
     CameraInfo.ViewFrustum = SceneView->ViewFrustum;
-    CameraInfo.ViewpointLocation = SceneView->ViewLocation;
-    DrawDebugBox(GetWorld(), CameraInfo.ViewpointLocation, FVector(10.0f), FQuat::Identity, FColor::Purple);
+    CameraInfo.ViewpointLocation = WorldToModelMatrix.TransformPosition(SceneView->ViewLocation);
 
     FVector ScreenMiddle, ScreenLeft, ScreenRight;
     FVector ScreenMiddleDir, ScreenLeftDir, ScreenRightDir;
@@ -172,9 +169,18 @@ void UUnrealNexusComponent::UpdateCameraView()
     FirstController->DeprojectScreenPositionToWorld(0, CameraInfo.ViewportSize.Y / 2, ScreenLeft, ScreenLeftDir);
     FirstController->DeprojectScreenPositionToWorld(CameraInfo.ViewportSize.X, CameraInfo.ViewportSize.Y / 2, ScreenRight, ScreenRightDir);
 
-    DrawDebugPoint(GetWorld(), ScreenLeft, 20.0f, FColor::Green);
-    DrawDebugPoint(GetWorld(), ScreenMiddle, 20.0f, FColor::White);
-    DrawDebugPoint(GetWorld(), ScreenRight, 20.0f, FColor::Red);
+    ScreenLeft = WorldToModelMatrix.TransformPosition(ScreenLeft);
+    ScreenMiddle = WorldToModelMatrix.TransformPosition(ScreenMiddle);
+    ScreenRight = WorldToModelMatrix.TransformPosition(ScreenRight);
+
+    
+    // Transforming everything into model space
+    for (UINT32 i = 0; i < 5; i ++)
+    {
+        FPlane& Current = CameraInfo.ViewFrustum.Planes[i];
+        Current = WorldToModelMatrix.TransformPosition(Current.Flip());
+    }
+    
     const float SideLengthWorldSpace = (ScreenRight - ScreenLeft).Size();
    
     const float DistanceToCenter = (CameraInfo.ViewpointLocation - ScreenMiddle).Size();
@@ -182,13 +188,16 @@ void UUnrealNexusComponent::UpdateCameraView()
     const float ResolutionThisFrame = (2 * SideLengthWorldSpace / DistanceToCenter) / ViewportWidth;
 
     
-    for (UINT32 i = 0; i < 5; i ++)
-    {
-        FPlane& Current = CameraInfo.ViewFrustum.Planes[i];
-        Current = Current.Flip();
-    }
     CameraInfo.IsUsingSameResolutionAsBefore = CameraInfo.CurrentResolution == ResolutionThisFrame;
     CameraInfo.CurrentResolution = ResolutionThisFrame;
+
+    if (bShowDebugStuff)
+    {
+        DrawDebugBox(GetWorld(), CameraInfo.ViewpointLocation, FVector(10.0f), FQuat::Identity, FColor::Purple);
+        DrawDebugPoint(GetWorld(), ScreenLeft, 20.0f, FColor::Green);
+        DrawDebugPoint(GetWorld(), ScreenMiddle, 20.0f, FColor::White);
+        DrawDebugPoint(GetWorld(), ScreenRight, 20.0f, FColor::Red);
+    }
 }
 
 FVector UUnrealNexusComponent::VcgPoint3FToVector(const vcg::Point3f& Point3)
