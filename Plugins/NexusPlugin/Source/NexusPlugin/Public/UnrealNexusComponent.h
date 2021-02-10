@@ -20,15 +20,9 @@ struct FCameraInfo
     FVector2D ViewportSize;
     FVector ViewpointLocation; // Viewport
     FRotator ViewpointRotation;
-    FMatrix Model;
-    FMatrix View;
-    FMatrix Projection;
-    FMatrix ModelView, InvertedModelView;
-    FMatrix ModelViewProjection, InvertedModelViewProjection;
     FConvexVolume ViewFrustum;
     float CurrentResolution;
     bool IsUsingSameResolutionAsBefore;
-    FVector4 ViewDirection;
 };
 
 struct FTraversalElement
@@ -88,6 +82,7 @@ private:
     void UpdateCameraView();
     void UpdateBodySetup();
     
+    static FVector VcgPoint3FToVector(const vcg::Point3f& Point3);
 protected:
     FUnrealNexusData* ComponentData = new FUnrealNexusData();
     class FUnrealNexusProxy* Proxy = nullptr;

@@ -78,11 +78,11 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
     const FVector Viewpoint = CameraInfo.ViewpointLocation;
 
     const float SphereRadius = UseTight ? SelectedNode.tight_radius : NodeBoundingSphere.Radius();
-    vcg::Point3f BoundingSphereCenter = NodeBoundingSphere.Center();
-    const FVector ViewpointToBoundingSphere { Viewpoint.X - BoundingSphereCenter.X(),
-                                                    -Viewpoint.Z + BoundingSphereCenter.Y(),
-                                                    Viewpoint.Y - BoundingSphereCenter.Z()};
-    const float ViewpointDistanceToBoundingSphere = FMath::Max(ViewpointToBoundingSphere.Size(), 0.1f) - SphereRadius;
+    const FVector BoundingSphereCenter = GetComponentTransform().TransformPosition(VcgPoint3FToVector(NodeBoundingSphere.Center()));
+    const FVector ViewpointToBoundingSphere = FVector( Viewpoint.X - BoundingSphereCenter.X,
+                                                    Viewpoint.Y - BoundingSphereCenter.Y,
+                                                    Viewpoint.Z - BoundingSphereCenter.Z);
+    const float ViewpointDistanceToBoundingSphere = FMath::Max(ViewpointToBoundingSphere.Size() - SphereRadius, 0.1f);
     float CalculatedError = SelectedNode.error / (CameraInfo.CurrentResolution * ViewpointDistanceToBoundingSphere);
     
     const float BoundingSphereDistanceFromViewFrustum = CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SelectedNode.tight_radius);
@@ -102,17 +102,14 @@ float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg:
     float MinDistance = 1e20;
     const FConvexVolume& ViewFrustum = CameraInfo.ViewFrustum;
     const FConvexVolume::FPlaneArray& ViewPlanes = ViewFrustum.Planes;
-    vcg::Point3f SphereCenter = Sphere.Center();
+    const FVector SphereCenter = GetComponentTransform().TransformPosition(VcgPoint3FToVector(Sphere.Center()));
     for (UINT32 i = 0; i < 5; i ++)
     {
         const FPlane CurrentPlane = ViewPlanes[i];
-        const float Distance =  CurrentPlane.X * SphereCenter.X() +
-                                CurrentPlane.Z * SphereCenter.Y() +
-                                CurrentPlane.Y * SphereCenter.Z() +
-                                SphereTightRadius;
-        if (Distance < MinDistance)
+        const float DistanceFromPlane = FVector::Distance(SphereCenter, CurrentPlane);
+        if (DistanceFromPlane < MinDistance)
         {
-            MinDistance = Distance;
+            MinDistance = DistanceFromPlane;
         }
     }
     return MinDistance;
@@ -164,15 +161,6 @@ void UUnrealNexusComponent::UpdateCameraView()
     
     FViewMatrices& ViewMatrices = SceneView->ViewMatrices;
     // TODO: Check(SceneView)
-    CameraInfo.Model = GetComponentTransform().ToMatrixNoScale().GetTransposed();
-    CameraInfo.View = ViewMatrices.GetViewMatrix();
-    CameraInfo.Projection = ViewMatrices.GetProjectionMatrix();
-    
-    CameraInfo.ModelView = CameraInfo.Model * CameraInfo.View;
-    CameraInfo.InvertedModelView = CameraInfo.ModelView.Inverse(); 
-    
-    CameraInfo.ModelViewProjection = CameraInfo.Model * CameraInfo.View * CameraInfo.Projection;
-    CameraInfo.InvertedModelViewProjection = CameraInfo.ModelViewProjection.Inverse();
 
     CameraInfo.ViewFrustum = SceneView->ViewFrustum;
     CameraInfo.ViewpointLocation = SceneView->ViewLocation;
@@ -198,15 +186,14 @@ void UUnrealNexusComponent::UpdateCameraView()
     {
         FPlane& Current = CameraInfo.ViewFrustum.Planes[i];
         Current = Current.Flip();
-        const float Length = FMath::Sqrt(Current.X * Current.X + Current.Z * Current.Z + Current.Y * Current.Y);
-        Current.X /= Length;
-        Current.Y /= Length;
-        Current.Z /= Length;
-        Current.W /= Length;
-        Swap(Current.Y, Current.Z);
     }
     CameraInfo.IsUsingSameResolutionAsBefore = CameraInfo.CurrentResolution == ResolutionThisFrame;
     CameraInfo.CurrentResolution = ResolutionThisFrame;
+}
+
+FVector UUnrealNexusComponent::VcgPoint3FToVector(const vcg::Point3f& Point3)
+{
+    return FVector(Point3.X(), Point3.Z(), Point3.Y());
 }
 
 bool UUnrealNexusComponent::IsNodeLoaded(const UINT32 NodeID) const
@@ -358,11 +345,6 @@ void UUnrealNexusComponent::OnRegister()
     if (!NexusFile.IsEmpty())
     {
         Open(NexusFile);
-        if (bIsLoaded)
-        {
-            ComponentData->LoadIntoRam(0);
-            SetNodeStatus(0, ENodeStatus::Loaded);
-        }
     }
 }
 
