@@ -44,7 +44,7 @@ class FUnrealNexusProxy final
     friend class FNexusNodeRenderData;
     friend class UUnrealNexusComponent;
 protected:
-    class FUnrealNexusData* ComponentData;
+    class UUnrealNexusData* ComponentData;
     class UUnrealNexusComponent* Component;
     
     class FRunnableThread* JobThread;

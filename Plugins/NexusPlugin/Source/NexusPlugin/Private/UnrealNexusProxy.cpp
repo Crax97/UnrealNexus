@@ -1,4 +1,5 @@
 ﻿#include "UnrealNexusProxy.h"
+#include "NexusUtils.h"
 #include "NexusJobExecutorThread.h"
 #include "Animation/AnimCompress.h"
 #include "Materials/MaterialInstance.h"
@@ -19,7 +20,7 @@ FNexusNodeRenderData::FNexusNodeRenderData(const FUnrealNexusProxy* Proxy, NodeD
 {
     check(IsInRenderingThread());
 
-    Signature& TheSig = Proxy->ComponentData->header.signature;
+    Signature& TheSig = Proxy->ComponentData->Header.signature;
     NumPrimitives = Node.nface;
     CreatePositionBuffer(Node, Data);
     CreateIndexBuffer(TheSig, Node, Data, Proxy->Component->WindingOrder);
@@ -262,7 +263,7 @@ const int InMaxCacheSize)
     {
         LoadGPUData(0);
     }
-    JobExecutor = new FNexusJobExecutorThread(ComponentData->file);
+    JobExecutor = new FNexusJobExecutorThread(nullptr);
     JobThread = FRunnableThread::Create(JobExecutor, TEXT("Nexus Node Loader"));
     SetWireframeColor(FLinearColor::Green);
 
@@ -283,9 +284,9 @@ void FUnrealNexusProxy::FreeCache(Node* BestNode)
         UINT32 WorstID = 0;
         TArray<UINT32> LoadedNodes;
         LoadedMeshData.GenerateKeyArray(LoadedNodes);
-        for (UINT32 ID = 0; ID < ComponentData->header.n_nodes; ID ++)
+        for (UINT32 ID = 0; ID < ComponentData->Header.n_nodes; ID ++)
         {
-            Node* SelectedNode = &ComponentData->nodes[ID];
+            Node* SelectedNode = &ComponentData->Nodes[ID];
             const float SelectedNodeError = Component->GetErrorForNode(ID);
             if (!Worst || SelectedNodeError < Component->GetErrorForNode(WorstID))
             {
@@ -321,7 +322,7 @@ TOptional<TTuple<UINT32, Node*>> FUnrealNexusProxy::FindBestNode()
     UINT32 BestNodeID = 0;
     for (FCandidateNode& CandidateNode : CandidateNodes)
     {
-        Node* Candidate = &ComponentData->nodes[CandidateNode.ID];
+        Node* Candidate = &ComponentData->Nodes[CandidateNode.ID];
         if (!Component->IsNodeLoaded(CandidateNode.ID) && ( !BestNode || CandidateNode.FirstNodeError > BestNode->error))
         {
             BestNode = Candidate;
@@ -389,7 +390,7 @@ void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
     
     RemoveCandidateWithId(BestNodeID);
     Component->SetNodeStatus(BestNodeID, ENodeStatus::Pending);
-    JobExecutor->AddNewJobs({ FNexusJob{ EJobKind::Load, BestNodeID, ComponentData } });
+    JobExecutor->AddNewJobs({ FNexusJob{ EJobKind::Load, BestNodeID, nullptr } });
     
     FNexusJob DoneJob;
     TQueue<FNexusJob>& FinishedJobs = JobExecutor->GetJobsDone();
@@ -413,8 +414,8 @@ FUnrealNexusProxy::~FUnrealNexusProxy()
 
 void FUnrealNexusProxy::LoadGPUData(const uint32 N)
 {
-    Node& TheNode = ComponentData->nodes[N];
-    NodeData& TheData = ComponentData->nodedata[N];
+    Node& TheNode = ComponentData->Nodes[N];
+    NodeData& TheData = ComponentData->NodeData[N];
     check(TheData.memory);
 
     this->PendingCount ++;
@@ -432,7 +433,7 @@ void FUnrealNexusProxy::LoadGPUData(const uint32 N)
 void FUnrealNexusProxy::DropGPUData(uint32 N)
 {
     check(LoadedMeshData.Contains(N));
-    Node* TheNode = &ComponentData->nodes[N];
+    Node* TheNode = &ComponentData->Nodes[N];
     this->CurrentCacheSize -= TheNode->getSize();
     ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N](FRHICommandListImmediate& Commands)
     {
@@ -455,13 +456,13 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
         FNexusNodeRenderData* Data = LoadedMeshData[Id];
 
         // Detecting if this node is on the edge
-        Node& CurrentNode = ComponentData->nodes[Id];
-        Node& NextNode = ComponentData->nodes[Id + 1];
+        Node& CurrentNode = ComponentData->Nodes[Id];
+        Node& NextNode = ComponentData->Nodes[Id + 1];
         bool IsVisible = false;
         const UINT32 NextNodeFirstPatch = NextNode.first_patch;
         for (UINT32 PatchId = CurrentNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
         {
-            const int ChildNode = ComponentData->patches[PatchId].node;
+            const int ChildNode = ComponentData->Patches[PatchId].node;
             if (!SelectedNodes.Contains(ChildNode))
             {
                 IsVisible = true;
@@ -474,7 +475,7 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
         int EndIndex = 0;
         for (UINT32 PatchId = CurrentNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
         {
-            const Patch& CurrentNodePatch = ComponentData->patches[PatchId];
+            const Patch& CurrentNodePatch = ComponentData->Patches[PatchId];
             const UINT32 ChildNode = CurrentNodePatch.node;
             if (!SelectedNodes.Contains(ChildNode))
             {

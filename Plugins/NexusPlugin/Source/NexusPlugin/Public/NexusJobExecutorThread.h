@@ -1,5 +1,4 @@
 ﻿#pragma once
-#include "UnrealNexusData.h"
 
 namespace nx {
     class NexusFile;
@@ -14,7 +13,7 @@ struct FNexusJob
 {
     EJobKind Kind;
     uint32 NodeIndex;
-    FUnrealNexusData* Data;
+    class UUnrealNexusData* Data;
 };
 
 class FNexusJobExecutorThread final

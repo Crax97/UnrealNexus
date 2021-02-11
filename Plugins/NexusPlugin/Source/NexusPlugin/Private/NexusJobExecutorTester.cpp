@@ -6,8 +6,8 @@
 UNexusJobExecutorTester::UNexusJobExecutorTester(const FObjectInitializer& Initializer)
         : UPrimitiveComponent(Initializer)
 {
-
-    TestData = new FUnrealNexusData;
+#if 0
+    TestData = new UUnrealNexusData;
     auto& TestFile = TestData->file;
     auto GameContentPath = FPaths::ProjectContentDir();
     const auto FilePath = FPaths::Combine(GameContentPath, TEXT("skull.nxs"));
@@ -27,12 +27,14 @@ UNexusJobExecutorTester::UNexusJobExecutorTester(const FObjectInitializer& Initi
     }
     
     PrimaryComponentTick.bCanEverTick = true;
+#endif
 }
 
 
 void UNexusJobExecutorTester::TickComponent(float DeltaTime, ELevelTick TickType,
                                             FActorComponentTickFunction* ThisTickFunction)
 {
+#if 0
     CurrentTime += DeltaTime;
     if (CurrentTime >= NextWaitTime)
     {
@@ -54,17 +56,21 @@ void UNexusJobExecutorTester::TickComponent(float DeltaTime, ELevelTick TickType
         TestData->DropFromRam(CompletedJob.NodeIndex);
         ValidNodes.Add(CompletedJob.NodeIndex);
     }
+#endif
 }
 
 void UNexusJobExecutorTester::LogJob(const FNexusJob& NexusJob)
 {
+#if 0
     UE_LOG(NexusInfo, Log, TEXT("------NEXUS THREAD TEST------"));
     UE_LOG(NexusInfo, Log, TEXT("Loaded node %d"), NexusJob.NodeIndex);
     UE_LOG(NexusInfo, Log, TEXT("-----------------------------"));
+#endif
 }
 
 TArray<FNexusJob> UNexusJobExecutorTester::GenerateRandomJobs()
 {
+#if 0
     auto& Data = ChildComponent->ComponentData;
     const uint32 JobsToCreate = FMath::RandRange(0, ValidNodes.Num() - 1);
     TArray<FNexusJob> Jobs;
@@ -76,6 +82,8 @@ TArray<FNexusJob> UNexusJobExecutorTester::GenerateRandomJobs()
         Jobs.Add(FNexusJob {EJobKind::Load, NodeIndex, Data});
     }
     return Jobs;
+#endif
+    return {};
 }
 
 

@@ -1,10 +1,13 @@
 ﻿#include "UnrealNexusComponent.h"
+#include "NexusUtils.h"
 
 #include "UnrealNexusData.h"
 #include "UnrealNexusProxy.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/LocalPlayer.h"
 #include "DrawDebugHelpers.h"
+
+using namespace nx;
 
 // One unit in Unreal is 100cms
 constexpr float GUnrealScaleConversion = 1.0f;
@@ -31,7 +34,7 @@ UUnrealNexusComponent::~UUnrealNexusComponent()
     NodeStatuses.GetKeys(LoadedIDs);
     for (const int N : LoadedIDs)
     {
-        ComponentData->DropFromRam(N);
+        // ComponentData->DropFromRam(N);
     }
     
     if (Proxy && Proxy->IsReady())
@@ -40,25 +43,6 @@ UUnrealNexusComponent::~UUnrealNexusComponent()
     }
 
     delete ComponentData;
-}
-
-bool UUnrealNexusComponent::Open(const FString& Source)
-{
-    // Assuming files on disk for now
-    auto GameContentPath = FPaths::ProjectContentDir();
-    const auto FilePath = FPaths::Combine(GameContentPath, Source);
-    if (!FPaths::FileExists(FilePath)) return false;
-    char* CStr = TCHAR_TO_ANSI(*FilePath);
-    ComponentData->file->setFileName(CStr);
-    bIsLoaded = ComponentData->Init();
-    if(!bIsLoaded)
-    {
-        UE_LOG(NexusInfo, Log, TEXT("Could not open the file"));
-        return false;
-    }
-    CalculatedErrors.SetNum(ComponentData->header.n_nodes);
-    ComponentBoundsRadius = ComponentData->boundingSphere().Radius() * GUnrealScaleConversion;
-    return true;
 }
 
 void UUnrealNexusComponent::SetErrorForNode(UINT32 NodeID, float Error)
@@ -73,7 +57,7 @@ float UUnrealNexusComponent::GetErrorForNode(const UINT32 NodeID) const
 
 float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bool UseTight) const
 {
-    Node& SelectedNode = ComponentData->nodes[NodeID];
+    Node& SelectedNode = ComponentData->Nodes[NodeID];
     vcg::Sphere3f& NodeBoundingSphere = SelectedNode.sphere;
     const FVector Viewpoint = CameraInfo.ViewpointLocation;
 
@@ -228,10 +212,10 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
     TArray<FTraversalElement>& VisitingNodes = TraversalData.TraversalQueue;
     TSet<UINT32>& BlockedNodes = TraversalData.BlockedNodes, &SelectedNodes = TraversalData.SelectedNodes;
     TArray<float>& InstanceErrors = TraversalData.InstanceErrors;
-    InstanceErrors.SetNum(ComponentData->header.n_nodes);
+    InstanceErrors.SetNum(ComponentData->Header.n_nodes);
     
     // Load roots
-    for (UINT32 i = 0; i < ComponentData->nroots; i ++)
+    for (UINT32 i = 0; i < ComponentData->RootsCount; i ++)
     {
         AddNodeToTraversal(TraversalData, i);
     }
@@ -279,13 +263,13 @@ bool UUnrealNexusComponent::CanNodeBeExpanded(Node* Node, const int NodeID, cons
 void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, const bool ShouldMarkBlocked)
 {
     Node* CurrentNode = CurrentElement.TheNode; 
-    Node* NextNode = &ComponentData->nodes[CurrentElement.Id + 1];
+    Node* NextNode = &ComponentData->Nodes[CurrentElement.Id + 1];
     for (UINT32 PatchIndex = CurrentNode->first_patch;
         PatchIndex < NextNode->first_patch; PatchIndex ++)
     {
-        Patch& CurrentPatch = ComponentData->patches[PatchIndex];
+        Patch& CurrentPatch = ComponentData->Patches[PatchIndex];
         const int PatchNodeId = CurrentPatch.node;
-        if (PatchNodeId == ComponentData->header.n_nodes - 1)
+        if (PatchNodeId == ComponentData->Header.n_nodes - 1)
         {
             // This node is the sink
             return;
@@ -305,7 +289,7 @@ void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElem
 void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId)
 {
     TraversalData.VisitedNodes.Add(NewNodeId);
-    Node* NewNode = &ComponentData->nodes[NewNodeId];
+    Node* NewNode = &ComponentData->Nodes[NewNodeId];
 
     const float NodeError = CalculateErrorForNode(NewNodeId, false);
     TraversalData.InstanceErrors[NewNodeId] = NodeError;
@@ -330,31 +314,12 @@ void UUnrealNexusComponent::UpdateRemainingErrors(TArray<float>& InstanceErrors)
     }
 }
 
-void UUnrealNexusComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
-{
-    if (PropertyChangedEvent.GetPropertyName() == GET_MEMBER_NAME_STRING_CHECKED(UUnrealNexusComponent, NexusFile))
-    {
-        Open(NexusFile);
-    }
-}
-
-
 void UUnrealNexusComponent::BeginPlay()
 {
     Super::BeginPlay();
 
     if (bIsLoaded && Proxy)
         Proxy->GetReady();
-}
-
-
-void UUnrealNexusComponent::OnRegister()
-{
-    Super::OnRegister();
-    if (!NexusFile.IsEmpty())
-    {
-        Open(NexusFile);
-    }
 }
 
 FBoxSphereBounds UUnrealNexusComponent::CalcBounds(const FTransform& LocalToWorld) const

@@ -8,6 +8,16 @@
 
 #include "UnrealNexusComponent.generated.h"
 
+// Forward declarations
+// ReSharper disable CppUE4CodingStandardNamingViolationWarning
+namespace nx
+{
+    struct Node;
+}
+// ReSharper restore CppUE4CodingStandardNamingViolationWarning
+
+using namespace nx;
+
 enum class ENodeStatus
 {
     Dropped, // The node isn't loaded
@@ -59,7 +69,6 @@ class UUnrealNexusComponent final
     friend class UNexusJobExecutorTester;
     
 private:
-    bool Open(const FString& Source);
     FCameraInfo CameraInfo;
     int CurrentlyBlockedNodes = 0;
     int CurrentDrawBudget = 0;
@@ -79,11 +88,10 @@ private:
     float CalculateErrorForNode(const UINT32 NodeID, bool UseTight) const;
     void UpdateRemainingErrors(TArray<float>& InstanceErrors);
     void UpdateCameraView();
-    void UpdateBodySetup();
     
     static FVector VcgPoint3FToVector(const vcg::Point3f& Point3);
 protected:
-    FUnrealNexusData* ComponentData = new FUnrealNexusData();
+    UUnrealNexusData* ComponentData = nullptr;
     class FUnrealNexusProxy* Proxy = nullptr;
     TMap<UINT32, ENodeStatus> NodeStatuses;
     bool bIsLoaded = false;
@@ -101,9 +109,7 @@ protected:
     void AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId);
     void AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked);
     
-    virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
     virtual void BeginPlay() override;
-    virtual void OnRegister() override;
     virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 public:
     explicit UUnrealNexusComponent(const FObjectInitializer& Initializer);

@@ -26,11 +26,11 @@ uint32 FNexusJobExecutorThread::Run()
         {
             if (Job.Kind == EJobKind::Load)
             {
-                Job.Data->LoadIntoRam(Job.NodeIndex);
+//                Job.Data->LoadIntoRam(Job.NodeIndex);
                 JobsDone.Enqueue(Job);
             } else // if (Job.Kind == EJobKind::Drop) 
             {
-                Job.Data->DropFromRam(Job.NodeIndex);
+//                Job.Data->DropFromRam(Job.NodeIndex);
             }
         }
 #ifdef NEXUS_RUNNING_QUEUE_TESTS

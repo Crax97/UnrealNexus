@@ -1,99 +1,24 @@
 ﻿#include "UnrealNexusData.h"
+#include "NexusUtils.h"
 
 #include "corto/decoder.h"
-#include "Kismet/KismetArrayLibrary.h"
+#include "space/intersection3.h"
+#include "space/line3.h"
 
 DEFINE_LOG_CATEGORY(NexusInfo);
 DEFINE_LOG_CATEGORY(NexusErrors);
 
-namespace DataUtils {
-    nx::Attribute ReadAttribute(uint8*& Ptr)
-    {
-        Attribute Attr;
-        Attr.type = static_cast<char>(Utils::Read8(Ptr));
-        Attr.number = static_cast<char>(Utils::Read8(Ptr));
-        return Attr;
-    }
+using namespace nx;
 
-    nx::Signature ReadSignature(uint8*& Ptr)
-    {
-        VertexElement Vertex;
-        for (int i = 0; i < 8; i ++)
-        {
-            Vertex.attributes[i] = ReadAttribute(Ptr);
-        }
-        FaceElement Face;
-        for (int i = 0; i < 8; i ++)
-        {
-            Face.attributes[i] = ReadAttribute(Ptr);
-        }
-        
-        Signature Sig;
-        Sig.vertex = Vertex;
-        Sig.face = Face;
-        Sig.flags = Utils::Read32(Ptr);
-        return Sig;
+class FDNode {
+public:
+    uint32_t Node;
+    float Dist;
+    explicit FDNode(const uint32_t N = 0, const float D = 0.0f): Node(N), Dist(D) {}
+    bool operator<(const FDNode &N) const {
+        return Dist < N.Dist;
     }
-
-    nx::Node ReadNode(NexusFile* File)
-    {
-        auto ReadShort = [&](uint8*& Ptr) {
-            uint16 Value = Utils::Read16(Ptr);
-            return *(reinterpret_cast<short*>(&Value));
-        };
-        using namespace Utils;
-        const int Size = 44;
-        uint8 Header[Size];
-        uint8* Ptr = Header;
-        File->read(reinterpret_cast<char*>(Header), Size);
-        Node TheNode;
-        TheNode.offset = Read32(Ptr);
-        TheNode.nvert = Read16(Ptr);
-        TheNode.nface = Read16(Ptr);
-        TheNode.error = ReadFloat(Ptr);
-        TheNode.cone.n[0] = ReadShort(Ptr);
-        TheNode.cone.n[1] = ReadShort(Ptr);
-        TheNode.cone.n[2] = ReadShort(Ptr);
-        TheNode.cone.n[3] = ReadShort(Ptr);
-        TheNode.sphere = vcg::Sphere3f {
-            { ReadFloat(Ptr), ReadFloat(Ptr), ReadFloat(Ptr)},
-            ReadFloat(Ptr)
-        };
-        TheNode.tight_radius = ReadFloat(Ptr);
-        TheNode.first_patch = Read32(Ptr);
-        return TheNode;
-    }
-    nx::Patch ReadPatch(NexusFile* File)
-    {
-        using namespace Utils;
-        const int Size = 12;
-        uint8 Header[Size];
-        File->read(reinterpret_cast<char*>(Header), Size);
-        uint8* Ptr = Header;
-        Patch ThePatch;
-        ThePatch.node = Read32(Ptr);
-        ThePatch.triangle_offset = Read32(Ptr);
-        ThePatch.texture = Read32(Ptr);
-        return ThePatch;
-    }
-    nx::Texture ReadTexture(NexusFile* File)
-    {
-        
-        using namespace Utils;
-        const int Size = 4 + 16 * 4;
-        uint8 Header[Size];
-        File->read(reinterpret_cast<char*>(Header), Size);
-        uint8* Ptr = Header;
-        Texture Tex;
-        Tex.offset = Read32(Ptr);
-        for (int i = 0; i < 16; i ++)
-        {
-            Tex.matrix[i] = ReadFloat(Ptr);
-        }
-        return Tex;
-    }
-}
-
+};
 void LogHeaderInfo(const Header& Header)
 {
     UE_LOG(NexusInfo, Log, TEXT("NEXUS: Read file with header version %d"), Header.version);
@@ -122,237 +47,99 @@ void LoadImageRawData(UTexture2D* Image, TextureData& Data)
     Image->UpdateResource();
 }
 
-bool FUnrealNexusData::ParseHeader()
+UUnrealNexusData::~UUnrealNexusData()
 {
-    
-    using namespace Utils;
-    using namespace DataUtils;
-    const int Nexus_Header_Size = 88;
-    const int Nexus_Header_Magic = 0x4E787320;
-    
-    uint8 RawHeader[Nexus_Header_Size];
-    uint8* Ptr = reinterpret_cast<uint8*>(&RawHeader);
-    if (!file->read(reinterpret_cast<char*>(RawHeader), Nexus_Header_Size)) {
-        UE_LOG(NexusErrors, Error, TEXT("Failure reading the header: Either the file is too short or it can't be accessed"));
-        return false;
-    }
-    
-    header.magic = Read32(Ptr); // 4 bytes
-    if (header.magic != Nexus_Header_Magic)
-    {
-        UE_LOG(NexusErrors, Error, TEXT("Magic Number mismatch, read %#x expected %#x"), header.magic, Nexus_Header_Magic);
-        return false;
-    }
-    header.version = Read32(Ptr); // 8
-    header.nvert = Read64(Ptr); // 16
-    header.nface = Read64(Ptr); // 24
-    header.signature = ReadSignature(Ptr); // 24 + 36 = 60
-    header.n_nodes = Read32(Ptr); // 64
-    header.n_patches = Read32(Ptr); // 68
-    header.n_textures = Read32(Ptr); // 72
-    header.sphere = vcg::Sphere3f {
-        { ReadFloat(Ptr), ReadFloat(Ptr), ReadFloat(Ptr)},
-        ReadFloat(Ptr)
-    }; // 72 + 16 = 88
+    Nodes = new Node[Header.n_nodes];
+    Patches = new Patch[Header.n_patches];
+    Textures = new Texture[Header.n_textures];
+    NodeData = new nx::NodeData[Header.n_nodes];
+    TextureData = new nx::TextureData[Header.n_textures];
 
-    check(Ptr - RawHeader == Nexus_Header_Size);
-    
-    LogHeaderInfo(header);
+}
+
+vcg::Sphere3f& UUnrealNexusData::BoundingSphere()
+{
+    return Header.sphere;
+}
+
+bool Closest(vcg::Sphere3f &Sphere, vcg::Ray3f &Ray, float &Distance) {
+    vcg::Point3f Dir = Ray.Direction();
+    const vcg::Line3f Line(Ray.Origin(), Dir.Normalize());
+
+    vcg::Point3f p, q;
+    const bool Success = vcg::IntersectionLineSphere(Sphere, Line, p, q);
+    if(!Success) return false;
+    p -= Ray.Origin();
+    q -= Ray.Origin();
+    float a = p*Ray.Direction();
+    const float b = q*Ray.Direction();
+    if(a > b) a = b;
+    if(b < 0) return false; //behind observer
+    if(a < 0) {   //we are inside
+        Distance = 0;
+        return true;
+    }
+    Distance = a;
     return true;
 }
 
-bool FUnrealNexusData::InitData()
+auto UUnrealNexusData::Intersects(vcg::Ray3f& Ray, float& Distance) -> bool
 {
-    using namespace Utils;
-    using namespace DataUtils;
-    
-    nodes = new Node[header.n_nodes];
-    patches = new Patch[header.n_patches];
-    textures = new Texture[header.n_textures];
-    nodedata = new NodeData[header.n_nodes];
-    texturedata = new TextureData[header.n_textures];
+	const uint32_t Sink = Header.n_nodes -1;
 
-    for (uint32 i = 0; i < header.n_nodes; i ++)
-    {
-        nodes[i] = ReadNode(file);
-    }
-    
-    for (uint32 i = 0; i < header.n_patches; i ++)
-    {
-        patches[i] = ReadPatch(file);
-    }
-    
-    for (uint32 i = 0; i < header.n_textures; i ++)
-    {
-        textures[i] = ReadTexture(file);
-    }
+    vcg::Point3f Dir = Ray.Direction();
+    Ray.SetDirection(Dir.Normalize());
 
-    //find number of roots:
-    nroots = header.n_nodes;
-    for(uint32_t j = 0; j < nroots; j++) {
-        for(uint32_t i = nodes[j].first_patch; i < nodes[j].last_patch(); i++)
-            if(patches[i].node < nroots)
-                nroots = patches[i].node;
-    }
-    return true;
-}
+    if(!Closest(Header.sphere, Ray, Distance))
+    	return false;
 
-void FUnrealNexusData::LoadIntoRam(const int N)
-{
-    if (LoadedNodes.Contains(N)) return;
-	
-	Signature &Sign = header.signature;
-	Node &Node = nodes[N];
-	uint64_t Offset = Node.getBeginOffset();
+    Distance = 1e20f;
 
-	NodeData &d = nodedata[N];
-	uint64_t Compressed_Size = Node.getEndOffset() - Offset;
+    //keep track of visited nodes (it is a DAG not a tree!
+    std::vector<bool> Visited(Header.n_nodes, false);
+    std::vector<FDNode> Candidates;      //heap of nodes
+    Candidates.push_back(FDNode(0, Distance));
 
-	uint64_t Size = Node.nvert * Sign.vertex.size() + Node.nface * Sign.face.size();
+    bool Hit = false;
 
-	if(!Sign.isCompressed()) {
+    while(Candidates.size()) {
+    	pop_heap(Candidates.begin(), Candidates.end());
+        const FDNode Candidate = Candidates.back();
+    	Candidates.pop_back();
 
-		d.memory = static_cast<char*>(file->map(Offset, Size));
+    	if(Candidate.Dist > Distance) break;
 
-	} else if(Sign.flags & Signature::CORTO) {
+    	Node &Node = Nodes[Candidate.Node];
 
-            char* Buffer = new char[Compressed_Size];
-            file->seek(Offset);
-            int64_t BytesRead = file->read(Buffer, Compressed_Size);
-            check(BytesRead == Compressed_Size);
+    	if(Node.first_patch  == Sink) {
+    		if(Candidate.Dist < Distance) {
+    			Distance = Candidate.Dist;
+    			Hit = true;
+    		}
+    		continue;
+    	}
 
-            d.memory = new char[Size];
+    	//not a leaf, insert children (if they intersect
+    	for(uint32_t i = Node.first_patch; i < Node.last_patch(); i++) {
+            const uint32_t Child = Patches[i].node;
+    		if(Child == Sink) continue;
+    		if(Visited[Child]) continue;
 
-			crt::Decoder Decoder(Compressed_Size, reinterpret_cast<unsigned char*>(Buffer));
-
-			Decoder.setPositions(reinterpret_cast<float*>(d.coords()));
-			if(Sign.vertex.hasNormals())
-				Decoder.setNormals(reinterpret_cast<int16_t*>(d.normals(Sign, Node.nvert)));
-			if(Sign.vertex.hasColors())
-				Decoder.setColors(reinterpret_cast<unsigned char*>(d.colors(Sign, Node.nvert)));
-			if(Sign.vertex.hasTextures())
-				Decoder.setUvs(reinterpret_cast<float*>(d.texCoords(Sign, Node.nvert)));
-			if(Node.nface)
-				Decoder.setIndex(d.faces(Sign, Node.nvert));
-
-			Decoder.decode();
-			delete Buffer;
-	} else
-	{
-		UE_LOG(NexusInfo, Error, TEXT("Only CORTO compression is supported"));
-		return;
-	}
-
-	//Shuffle points in compressed point clouds
-	if(!Sign.face.hasIndex()) {
-		TArray<int> Order;
-		Order.SetNum(Node.nvert);
-		for(int i = 0; i < Node.nvert; i++)
-			Order[i] = i;
-
-		UKismetArrayLibrary::Array_Shuffle(Order);
-			
-		TArray<vcg::Point3f> Coords;
-		Coords.SetNum(Node.nvert);
-		for(int i = 0; i < Node.nvert; i++)
-			Coords[i] = d.coords()[Order[i]];
-		FMemory::Memcpy(d.coords(), Coords.GetData(), sizeof(vcg::Point3f) * Node.nvert);
-
-		if(Sign.vertex.hasNormals()) {
-			vcg::Point3s *n = d.normals(Sign, Node.nvert);
-            TArray<vcg::Point3s> Normals;
-            Normals.SetNum(Node.nvert);
-			for(int i = 0; i < Node.nvert; i++)
-                Normals[i] = n[Order[i]];
-			FMemory::Memcpy(n, Normals.GetData(), sizeof(vcg::Point3f) * Node.nvert);
-		}
-
-		if(Sign.vertex.hasColors()) {
-			vcg::Color4b *c = d.colors(Sign, Node.nvert);
-            TArray<vcg::Color4b> Colors;
-            Colors.SetNum(Node.nvert);
-			for(int i =0; i < Node.nvert; i++)
-				Colors[i] = c[Order[i]];
-			FMemory::Memcpy(c, Colors.GetData(), sizeof(vcg::Color4b) * Node.nvert);
-		}
-	}
-
-	check(d.memory);
-	if(header.n_textures) {
-		//be sure to load images
-		for(uint32_t p = Node.first_patch; p < Node.last_patch(); p++) {
-			uint32_t t = patches[p].texture;
-			if(t == 0xffffffff) continue;
-
-			TextureData &TexData = texturedata[t];
-			TexData.count_ram++;
-			if(TexData.count_ram > 1)
-				continue;
-
-			Texture &Tex = textures[t];
-			TexData.memory = static_cast<char*>(file->map(Tex.getBeginOffset(), Tex.getSize()));
-			checkf(TexData.memory, TEXT("Failed mapping texture data"));
-
-			loadImageFromData(TexData, t);
-		}
-	}
-	UE_LOG(NexusInfo, Log, TEXT("Loaded Nexus node with index %d"), N);
-	LoadedNodes.Add(N);
-}
-
-void FUnrealNexusData::DropFromRam(const int N)
-{
-    if (!LoadedNodes.Contains(N)) return;
-	Node &Node = nodes[N];
-    NodeData &Data = nodedata[N];
-
-    assert(data.memory);
-
-    if(!header.signature.isCompressed()) //not compressed.
-    	file->unmap(reinterpret_cast<unsigned char*>(Data.memory));
-    else
-    	delete []Data.memory;
-
-    Data.memory = nullptr;
-
-    //report RAM size for compressed meshes.
-    uint32_t Size = Node.nvert * header.signature.vertex.size() +
-    			Node.nface * header.signature.face.size();
-
-    if(header.n_textures) {
-    	for(uint32_t p = Node.first_patch; p < Node.last_patch(); p++) {
-	        const uint32_t TextureIndex = patches[p].texture;
-    		if(TextureIndex == 0xffffffff) continue;
-
-    		TextureData &TexData = texturedata[TextureIndex];
-    		TexData.count_ram--;
-    		if(TexData.count_ram != 0) continue;
-
-    		delete []TexData.memory;
-    		TexData.memory = nullptr;
-    		Size += TexData.width * TexData.height * 4;
+    		float d;
+    		if(Closest(Nodes[Child].sphere, Ray, d)) {
+    			Candidates.push_back(FDNode(Child, d));
+    			push_heap(Candidates.begin(), Candidates.end());
+    			Visited[Child] = true;
+    		}
     	}
     }
-	UE_LOG(NexusInfo, Log, TEXT("Dropped Nexus node with index %d"), N);
-	LoadedNodes.Remove(N);
+    Distance = FMath::Sqrt(Distance);
+    return Hit;
 }
 
-bool FUnrealNexusData::Init()
+uint32_t UUnrealNexusData::Size(const uint32_t Node) const
 {
-    if (!file->open(NexusFile::Read)) return false;
-    return ParseHeader() && InitData();
+    return Nodes[Node].getSize();
 }
 
-void FUnrealNexusData::loadImageFromData(nx::TextureData& Data, int TextureIndex)
-{
-    
-    Texture& Texture = textures[TextureIndex];
-    Data.memory = static_cast<char*>(file->map(Texture.getBeginOffset(), Texture.getSize()));
-    checkf(Data.memory, TEXT("Failed mapping texture data"));
-    Data.memory = ToRGBA8888(Data.memory, Data);
-   
-    UTexture2D* Image = UTexture2D::CreateTransient(Data.width, Data.height, PF_R8G8B8A8);
-    LoadImageRawData(Image, Data);
-    file->unmap(Data.memory);
-    
-}
+UUnrealNexusData::UUnrealNexusData() {}

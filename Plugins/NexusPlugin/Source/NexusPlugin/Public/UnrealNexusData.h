@@ -1,30 +1,29 @@
 ﻿#pragma once
-
+#include "dag.h"
 #include "nexusdata.h"
-#include "UnrealNexusFile.h"
-#include "NexusUtils.h"
 
-class FUnrealNexusData final :
-    public nx::NexusData
+#include "UnrealNexusData.generated.h"
+
+using namespace nx;
+
+UCLASS()
+class UUnrealNexusData final : public UObject
 {
-private:
-
-    bool ParseHeader();
-    bool InitData();
-    TSet<int> LoadedNodes;
+    GENERATED_BODY()
     
 public:
-    FUnrealNexusData()
-    {
-        file = new FUnrealNexusFile();
-    }
+    UUnrealNexusData();
+    virtual ~UUnrealNexusData();
 
-    bool Init();
-    void LoadIntoRam(int N);
-    void DropFromRam(int N);
-    
-    ~FUnrealNexusData()
-    {
-    }
-    virtual void loadImageFromData(nx::TextureData& Data, int TextureIndex) override;
+    Header Header;
+    Node *Nodes;
+    Patch *Patches;
+    Texture *Textures;
+    NodeData *NodeData;
+    TextureData *TextureData;
+    uint32_t RootsCount;
+
+    vcg::Sphere3f &BoundingSphere();
+    bool Intersects(vcg::Ray3f &Ray, float &Distance);
+    uint32_t Size(uint32_t Node) const;
 };
