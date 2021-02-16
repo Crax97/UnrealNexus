@@ -58,10 +58,8 @@ public:
 	}
 
 	uint16_t *faces(Signature &sig, uint32_t nvert) {
-		return faces(sig, nvert, memory);
+		return (uint16_t  *)(memory + nvert*sig.vertex.size());
 	}
-
-	static uint16_t *faces(Signature &sig, uint32_t nvert, char *mem);
 };
 
 class TextureData {

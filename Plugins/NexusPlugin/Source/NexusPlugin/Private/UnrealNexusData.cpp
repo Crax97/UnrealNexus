@@ -2,8 +2,8 @@
 #include "NexusUtils.h"
 
 #include "corto/decoder.h"
-#include "space/intersection3.h"
-#include "space/line3.h"
+// #include "space/intersection3.h"
+// #include "space/line3.h"
 
 DEFINE_LOG_CATEGORY(NexusInfo);
 DEFINE_LOG_CATEGORY(NexusErrors);
@@ -63,6 +63,7 @@ vcg::Sphere3f& UUnrealNexusData::BoundingSphere()
 }
 
 bool Closest(vcg::Sphere3f &Sphere, vcg::Ray3f &Ray, float &Distance) {
+#if 0
     vcg::Point3f Dir = Ray.Direction();
     const vcg::Line3f Line(Ray.Origin(), Dir.Normalize());
 
@@ -80,6 +81,7 @@ bool Closest(vcg::Sphere3f &Sphere, vcg::Ray3f &Ray, float &Distance) {
         return true;
     }
     Distance = a;
+#endif
     return true;
 }
 
