@@ -11,6 +11,21 @@ DECLARE_LOG_CATEGORY_EXTERN(NexusErrors, Log, All)
 
 namespace Utils
 {
+    template <typename T>
+    T Read(uint8*& Buffer)
+    {
+        T Item;
+        FMemory::Memcpy(&Item, Buffer, sizeof(T));
+        Buffer = Buffer + sizeof(T);
+        return Item;
+    }
+
+    inline void Read(uint8*& Buffer, uint8* Output, const SIZE_T Size)
+    {
+        FMemory::Memcpy(Output, Buffer, Size);
+        Buffer = Buffer + Size;
+    }
+    
     inline uint8 Read8(uint8*& Buf) { return * Buf++; }
 
     inline uint16 Read16(uint8*& Buf)
@@ -70,7 +85,7 @@ namespace DataUtils {
         Sig.flags = Utils::Read32(Ptr);
         return Sig;
     }
-    nx::Node ReadNode();
-    inline nx::Patch ReadPatch();
-    nx::Texture ReadTexture();
+    nx::Node ReadNode(uint8*& Buffer);
+    nx::Patch ReadPatch(uint8*& Buffer);
+    nx::Texture ReadTexture(uint8*& Buffer);
 }

@@ -19,17 +19,6 @@ public:
         return Dist < N.Dist;
     }
 };
-void LogHeaderInfo(const Header& Header)
-{
-    UE_LOG(NexusInfo, Log, TEXT("NEXUS: Read file with header version %d"), Header.version);
-    UE_LOG(NexusInfo, Log, TEXT("\t %d vertices"), Header.nvert);
-    UE_LOG(NexusInfo, Log, TEXT("\t %d faces"), Header.nface);
-    UE_LOG(NexusInfo, Log, TEXT("\t %d nodes"), Header.n_nodes);
-    UE_LOG(NexusInfo, Log, TEXT("\t %d patches"), Header.n_patches);
-    UE_LOG(NexusInfo, Log, TEXT("\t %d textures"), Header.n_textures);
-    UE_LOG(NexusInfo, Log, TEXT("\t sphere: center (%f, %f, %f) radius %f"), Header.sphere.Center().X(),Header.sphere.Center().Y(),Header.sphere.Center().Z(), Header.sphere.Radius());
-}
-
 
 char* ToRGBA8888(char* RawData, const nx::TextureData& Data)
 {
@@ -142,6 +131,114 @@ auto UUnrealNexusData::Intersects(vcg::Ray3f& Ray, float& Distance) -> bool
 uint32_t UUnrealNexusData::Size(const uint32_t Node) const
 {
     return Nodes[Node].getSize();
+}
+
+void UUnrealNexusData::Serialize(FArchive& Archive)
+{
+	Super::Serialize(Archive);
+	SerializeHeader(Archive);
+	SerializeNodes(Archive);
+	SerializePatches(Archive);
+	SerializeTextures(Archive);
+}
+
+void UUnrealNexusData::SerializeHeader(FArchive& Archive)
+{
+	Archive << Header.version;
+	Archive << Header.nvert;
+	Archive << Header.nface;
+	SerializeSignature(Archive);
+	Archive << Header.n_nodes;
+	Archive << Header.n_patches;
+	Archive << Header.n_textures;
+	SerializeSphere(Archive, Header.sphere);
+}
+
+void UUnrealNexusData::SerializeSignature(FArchive& Archive)
+{
+	SerializeVertexAttributes(Archive, Header.signature.vertex);
+	SerializeFaceAttributes(Archive, Header.signature.face);
+	Archive << Header.signature.flags;
+}
+
+void UUnrealNexusData::SerializeAttribute(FArchive& Archive, const Attribute& Attribute)
+{
+	uint8 Type = Attribute.type;
+	uint8 Number = Attribute.number;
+	Archive.Serialize(reinterpret_cast<void*>(&Type), 1);
+	Archive.Serialize(reinterpret_cast<void*>(&Number), 1);
+}
+
+void UUnrealNexusData::SerializeVertexAttributes(FArchive& Archive, const VertexElement& Vertex)
+{
+	for (int Index = 0; Index < 8; Index ++)
+	{
+		SerializeAttribute(Archive, Vertex.attributes[Index]);
+	}
+}
+
+void UUnrealNexusData::SerializeFaceAttributes(FArchive& Archive, const FaceElement& Face)
+{
+	for (int Index = 0; Index < 8; Index ++)
+	{
+		SerializeAttribute(Archive, Face.attributes[Index]);
+	}
+}
+
+void UUnrealNexusData::SerializeSphere(FArchive& Archive, const vcg::Sphere3f& Sphere)
+{
+	auto X = Sphere.Center().X();
+	auto Y = Sphere.Center().Y();
+	auto Z = Sphere.Center().Z();
+	auto Radius = Sphere.Radius();
+	Archive << X;
+	Archive << Y;
+	Archive << Z;
+	Archive << Radius;
+}
+
+void UUnrealNexusData::SerializeNodes(FArchive& Archive) const
+{
+	for (uint32 i = 0; i < Header.n_nodes; i ++)
+	{
+		auto& Node = Nodes[i];
+		Archive << Node.offset;
+		Archive << Node.nvert;
+		Archive << Node.nface;
+		Archive << Node.error;
+		Archive << Node.cone.n[0];
+		Archive << Node.cone.n[1];
+		Archive << Node.cone.n[2];
+		Archive << Node.cone.n[3];
+		Archive << Node.cone.n[0];
+		SerializeSphere(Archive, Node.sphere);
+		Archive << Node.tight_radius;
+		Archive << Node.first_patch;
+	}
+}
+
+void UUnrealNexusData::SerializePatches(FArchive& Archive) const
+{
+	for (uint32 i = 0; i < Header.n_patches; i ++)
+	{
+		auto& Patch = Patches[i];
+		Archive << Patch.node;
+		Archive << Patch.triangle_offset;
+		Archive << Patch.texture;
+	}
+}
+
+void UUnrealNexusData::SerializeTextures(FArchive& Archive) const
+{
+	for (uint32 i = 0; i < Header.n_textures; i ++)
+	{
+		auto& Texture = Textures[i];
+		Archive << Texture.offset;
+		for (int Mij = 0; Mij < 16; Mij ++)
+		{
+			Archive << Texture.matrix[Mij];
+		}
+	}
 }
 
 UUnrealNexusData::UUnrealNexusData() {}
