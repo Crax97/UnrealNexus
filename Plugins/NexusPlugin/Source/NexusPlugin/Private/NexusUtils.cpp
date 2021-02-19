@@ -47,3 +47,9 @@ nx::Texture DataUtils::ReadTexture(uint8*& Buffer)
     }
     return Tex;
 }
+
+FStreamableManager& GetStreamableManager()
+{
+    static FStreamableManager Manager;
+    return Manager;
+}

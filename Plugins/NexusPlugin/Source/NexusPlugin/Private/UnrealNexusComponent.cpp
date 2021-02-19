@@ -2,6 +2,7 @@
 #include "NexusUtils.h"
 
 #include "UnrealNexusData.h"
+#include "UnrealNexusNodeData.h"
 #include "UnrealNexusProxy.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/LocalPlayer.h"
@@ -34,15 +35,13 @@ UUnrealNexusComponent::~UUnrealNexusComponent()
     NodeStatuses.GetKeys(LoadedIDs);
     for (const int N : LoadedIDs)
     {
-        // ComponentData->DropFromRam(N);
+        // NexusLoadedAsset->DropFromRam(N);
     }
     
     if (Proxy && Proxy->IsReady())
     {
         Proxy->Flush();
     }
-
-    delete ComponentData;
 }
 
 void UUnrealNexusComponent::SetErrorForNode(UINT32 NodeID, float Error)
@@ -57,19 +56,19 @@ float UUnrealNexusComponent::GetErrorForNode(const UINT32 NodeID) const
 
 float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bool UseTight) const
 {
-    Node& SelectedNode = ComponentData->Nodes[NodeID];
-    vcg::Sphere3f& NodeBoundingSphere = SelectedNode.sphere;
+    Node* SelectedNode = &NexusLoadedAsset->Nodes[NodeID].NexusNode;
+    vcg::Sphere3f& NodeBoundingSphere = SelectedNode->sphere;
     const FVector Viewpoint = CameraInfo.ViewpointLocation;
 
-    const float SphereRadius = UseTight ? SelectedNode.tight_radius : NodeBoundingSphere.Radius();
+    const float SphereRadius = UseTight ? SelectedNode->tight_radius : NodeBoundingSphere.Radius();
     const FVector BoundingSphereCenter = VcgPoint3FToVector(NodeBoundingSphere.Center());
     const FVector ViewpointToBoundingSphere = FVector( Viewpoint.X - BoundingSphereCenter.X,
                                                     Viewpoint.Y - BoundingSphereCenter.Y,
                                                     Viewpoint.Z - BoundingSphereCenter.Z);
     const float ViewpointDistanceToBoundingSphere = FMath::Max(ViewpointToBoundingSphere.Size() - SphereRadius, 0.1f);
-    float CalculatedError = SelectedNode.error / (CameraInfo.CurrentResolution * ViewpointDistanceToBoundingSphere);
+    float CalculatedError = SelectedNode->error / (CameraInfo.CurrentResolution * ViewpointDistanceToBoundingSphere);
     
-    const float BoundingSphereDistanceFromViewFrustum = CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SelectedNode.tight_radius);
+    const float BoundingSphereDistanceFromViewFrustum = CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SelectedNode->tight_radius);
 
     if (BoundingSphereDistanceFromViewFrustum < -SphereRadius)
     {
@@ -117,7 +116,7 @@ void UUnrealNexusComponent::Update(float DeltaSeconds)
 {
     Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), 1000.0f));
     UpdateBounds();
-    if (!bIsLoaded || !Proxy) return;
+    if ( !Proxy) return;
     UpdateCameraView();
     Proxy->BeginFrame(DeltaSeconds);
     const FTraversalData TraversalData = DoTraversal();
@@ -212,10 +211,10 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
     TArray<FTraversalElement>& VisitingNodes = TraversalData.TraversalQueue;
     TSet<UINT32>& BlockedNodes = TraversalData.BlockedNodes, &SelectedNodes = TraversalData.SelectedNodes;
     TArray<float>& InstanceErrors = TraversalData.InstanceErrors;
-    InstanceErrors.SetNum(ComponentData->Header.n_nodes);
+    InstanceErrors.SetNum(NexusLoadedAsset->Header.n_nodes);
     
     // Load roots
-    for (UINT32 i = 0; i < ComponentData->RootsCount; i ++)
+    for (int i = 0; i < NexusLoadedAsset->RootsCount; i ++)
     {
         AddNodeToTraversal(TraversalData, i);
     }
@@ -262,14 +261,11 @@ bool UUnrealNexusComponent::CanNodeBeExpanded(Node* Node, const int NodeID, cons
 
 void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, const bool ShouldMarkBlocked)
 {
-    Node* CurrentNode = CurrentElement.TheNode; 
-    Node* NextNode = &ComponentData->Nodes[CurrentElement.Id + 1];
-    for (UINT32 PatchIndex = CurrentNode->first_patch;
-        PatchIndex < NextNode->first_patch; PatchIndex ++)
+    auto& NextNode = NexusLoadedAsset->Nodes[CurrentElement.Id + 1];
+    for (auto& CurrentPatch : NextNode.NodePatches)
     {
-        Patch& CurrentPatch = ComponentData->Patches[PatchIndex];
         const int PatchNodeId = CurrentPatch.node;
-        if (PatchNodeId == ComponentData->Header.n_nodes - 1)
+        if (PatchNodeId == NexusLoadedAsset->Header.n_nodes - 1)
         {
             // This node is the sink
             return;
@@ -289,7 +285,7 @@ void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElem
 void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId)
 {
     TraversalData.VisitedNodes.Add(NewNodeId);
-    Node* NewNode = &ComponentData->Nodes[NewNodeId];
+    Node* NewNode = &NexusLoadedAsset->Nodes[NewNodeId].NexusNode;
 
     const float NodeError = CalculateErrorForNode(NewNodeId, false);
     TraversalData.InstanceErrors[NewNodeId] = NodeError;
@@ -304,7 +300,7 @@ void UUnrealNexusComponent::UpdateRemainingErrors(TArray<float>& InstanceErrors)
     TArray<UINT32> LoadedNodes = Proxy->GetLoadedNodes();
     for (auto& NodeID : LoadedNodes)
     {
-        // const Node& TheNode = ComponentData->nodes[NodeID];
+        // const Node& TheNode = NexusLoadedAsset->nodes[NodeID];
         const float NodeError = CalculateErrorForNode(NodeID, false);
         if (InstanceErrors[NodeID] == 0.0f)
         {
@@ -317,8 +313,13 @@ void UUnrealNexusComponent::UpdateRemainingErrors(TArray<float>& InstanceErrors)
 void UUnrealNexusComponent::BeginPlay()
 {
     Super::BeginPlay();
-
-    if (bIsLoaded && Proxy)
+    if (NexusLoadedAsset)
+    {
+        CalculatedErrors.SetNum(NexusLoadedAsset->Nodes.Num());
+        NodeStatuses.Reserve(NexusLoadedAsset->Nodes.Num());   
+    }
+    
+    if (Proxy)
         Proxy->GetReady();
 }
 
@@ -332,7 +333,7 @@ void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                           FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-    if(!bIsLoaded) return;
+    if(!NexusLoadedAsset) return;
     Update(DeltaTime);
 
 }

@@ -1,4 +1,7 @@
 ﻿#include "UnrealNexusProxy.h"
+#include "UnrealNexusData.h"
+#include "UnrealNexusNodeData.h"
+
 #include "NexusUtils.h"
 #include "NexusJobExecutorThread.h"
 #include "Animation/AnimCompress.h"
@@ -23,14 +26,14 @@ FNexusNodeRenderData::FNexusNodeRenderData(const FUnrealNexusProxy* Proxy, NodeD
     Signature& TheSig = Proxy->ComponentData->Header.signature;
     NumPrimitives = Node.nface;
     CreatePositionBuffer(Node, Data);
-    CreateIndexBuffer(TheSig, Node, Data, Proxy->Component->WindingOrder);
+    CreateIndexBuffer(TheSig, Node, Data);
     
     InitTexBuffer(Proxy,  TheSig, Data, Node);
     InitTangentsBuffer(Proxy, TheSig, Data, Node);
     InitVertexFactory();
 }
 
-void FNexusNodeRenderData::CreateIndexBuffer(Signature& Sig, Node& Node,  nx::NodeData& Data, EWindingOrder WindingOrder)
+void FNexusNodeRenderData::CreateIndexBuffer(Signature& Sig, Node& Node,  nx::NodeData& Data)
 {
     check(Sig.face.hasIndex())
     TArray<uint16> Indices;
@@ -254,7 +257,7 @@ FNexusNodeRenderData::~FNexusNodeRenderData()
 FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending,
 const int InMaxCacheSize)
     : FPrimitiveSceneProxy(static_cast<UPrimitiveComponent*>(TheComponent)),
-        ComponentData(TheComponent->ComponentData),
+        ComponentData(TheComponent->NexusLoadedAsset),
         Component(TheComponent),
         MaxPending(InMaxPending),
         MaxCacheSize(InMaxCacheSize)
@@ -286,7 +289,7 @@ void FUnrealNexusProxy::FreeCache(Node* BestNode)
         LoadedMeshData.GenerateKeyArray(LoadedNodes);
         for (UINT32 ID = 0; ID < ComponentData->Header.n_nodes; ID ++)
         {
-            Node* SelectedNode = &ComponentData->Nodes[ID];
+            Node* SelectedNode = &ComponentData->Nodes[ID].NexusNode;
             const float SelectedNodeError = Component->GetErrorForNode(ID);
             if (!Worst || SelectedNodeError < Component->GetErrorForNode(WorstID))
             {
@@ -306,6 +309,7 @@ void FUnrealNexusProxy::FreeCache(Node* BestNode)
 
 void FUnrealNexusProxy::Flush()
 {
+#if 0
     if (LoadedMeshData.Num() == 0) 
         return;
     TArray<UINT32> LoadedNodes;
@@ -314,6 +318,7 @@ void FUnrealNexusProxy::Flush()
     {
         DropGPUData(Node);
     }
+#endif
 }
 
 TOptional<TTuple<UINT32, Node*>> FUnrealNexusProxy::FindBestNode()
@@ -322,7 +327,8 @@ TOptional<TTuple<UINT32, Node*>> FUnrealNexusProxy::FindBestNode()
     UINT32 BestNodeID = 0;
     for (FCandidateNode& CandidateNode : CandidateNodes)
     {
-        Node* Candidate = &ComponentData->Nodes[CandidateNode.ID];
+        auto& UNode = ComponentData->Nodes[CandidateNode.ID];
+        Node* Candidate = &UNode.NexusNode;
         if (!Component->IsNodeLoaded(CandidateNode.ID) && ( !BestNode || CandidateNode.FirstNodeError > BestNode->error))
         {
             BestNode = Candidate;
@@ -390,8 +396,15 @@ void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
     
     RemoveCandidateWithId(BestNodeID);
     Component->SetNodeStatus(BestNodeID, ENodeStatus::Pending);
-    JobExecutor->AddNewJobs({ FNexusJob{ EJobKind::Load, BestNodeID, nullptr } });
-    
+    ComponentData->LoadNodeAsync(BestNodeID, FStreamableDelegate::CreateLambda([&, BestNodeID]()
+    {
+        Component->SetNodeStatus(BestNodeID, ENodeStatus::Loaded);
+        LoadGPUData(BestNodeID);
+        UE_LOG(NexusInfo, Log, TEXT("Loaded Nexus node with index %d"), BestNodeID);
+    }));
+    // JobExecutor->AddNewJobs({ FNexusJob{ EJobKind::Load, BestNodeID, nullptr } });
+
+    /*
     FNexusJob DoneJob;
     TQueue<FNexusJob>& FinishedJobs = JobExecutor->GetJobsDone();
     while (FinishedJobs.Dequeue(DoneJob))
@@ -400,6 +413,7 @@ void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
         LoadGPUData(DoneJob.NodeIndex);
         UE_LOG(NexusInfo, Log, TEXT("Loaded Nexus node with index %d"), DoneJob.NodeIndex);
     }
+    */
 }
 
 FUnrealNexusProxy::~FUnrealNexusProxy()
@@ -414,8 +428,9 @@ FUnrealNexusProxy::~FUnrealNexusProxy()
 
 void FUnrealNexusProxy::LoadGPUData(const uint32 N)
 {
-    Node& TheNode = ComponentData->Nodes[N];
-    NodeData& TheData = ComponentData->NodeData[N];
+    auto& TheNode = ComponentData->Nodes[N].NexusNode;
+    auto* TheNodeData = ComponentData->GetNode(N);
+    NodeData& TheData = TheNodeData->NexusNodeData;
     check(TheData.memory);
 
     this->PendingCount ++;
@@ -433,8 +448,8 @@ void FUnrealNexusProxy::LoadGPUData(const uint32 N)
 void FUnrealNexusProxy::DropGPUData(uint32 N)
 {
     check(LoadedMeshData.Contains(N));
-    Node* TheNode = &ComponentData->Nodes[N];
-    this->CurrentCacheSize -= TheNode->getSize();
+    Node& TheNode = ComponentData->Nodes[N].NexusNode;
+    this->CurrentCacheSize -= TheNode.getSize();
     ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N](FRHICommandListImmediate& Commands)
     {
         LoadedMeshData.Remove(N);
@@ -456,13 +471,14 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
         FNexusNodeRenderData* Data = LoadedMeshData[Id];
 
         // Detecting if this node is on the edge
-        Node& CurrentNode = ComponentData->Nodes[Id];
-        Node& NextNode = ComponentData->Nodes[Id + 1];
+        auto& CurrentNode = ComponentData->Nodes[Id];
+        auto& NextNode = ComponentData->Nodes[Id + 1];
+        
         bool IsVisible = false;
-        const UINT32 NextNodeFirstPatch = NextNode.first_patch;
-        for (UINT32 PatchId = CurrentNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
+        const UINT32 NextNodeFirstPatch = NextNode.NexusNode.first_patch;
+        for (auto& Patch : CurrentNode.NodePatches)
         {
-            const int ChildNode = ComponentData->Patches[PatchId].node;
+            const int ChildNode = Patch.node;
             if (!SelectedNodes.Contains(ChildNode))
             {
                 IsVisible = true;
@@ -473,9 +489,9 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
 
         int Offset = 0;
         int EndIndex = 0;
-        for (UINT32 PatchId = CurrentNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
+        for (UINT32 PatchId = CurrentNode.NexusNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
         {
-            const Patch& CurrentNodePatch = ComponentData->Patches[PatchId];
+            const Patch& CurrentNodePatch = CurrentNode.NodePatches[PatchId];
             const UINT32 ChildNode = CurrentNodePatch.node;
             if (!SelectedNodes.Contains(ChildNode))
             {

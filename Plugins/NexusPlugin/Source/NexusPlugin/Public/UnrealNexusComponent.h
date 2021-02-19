@@ -50,13 +50,6 @@ struct FTraversalData
     TArray<float> InstanceErrors;
 };
 
-UENUM(BlueprintType)
-enum class EWindingOrder : uint8
-{
-    Clockwise UMETA(DisplayName="Clockwise"),
-    Counter_Clockwise UMETA(DisplayName="Counter Clockwise"),
-};
-
 
 UCLASS(meta = (BlueprintSpawnableComponent))
 class UUnrealNexusComponent final
@@ -91,10 +84,8 @@ private:
     
     static FVector VcgPoint3FToVector(const vcg::Point3f& Point3);
 protected:
-    UUnrealNexusData* ComponentData = nullptr;
     class FUnrealNexusProxy* Proxy = nullptr;
     TMap<UINT32, ENodeStatus> NodeStatuses;
-    bool bIsLoaded = false;
 
     // Updates the status of the component
     void Update(float DeltaTime);
@@ -118,9 +109,12 @@ public:
     virtual void TickComponent(float DeltaTime, ELevelTick TickType,
         FActorComponentTickFunction* ThisTickFunction) override;
 
-    // TODO: Replace this with assets picker
+    // https://docs.unrealengine.com/en-US/ProgrammingAndScripting/ProgrammingWithCPP/Assets/AsyncLoading/index.html
+    // A TSoftObjectPtr is basically a TWeakObjectPtr that wraps around a FSoftObjectPath,
+    // and will template to a specific class so you can restrict the editor UI to only
+    // allow selecting certain classes.
     UPROPERTY(EditAnywhere)
-    FString NexusFile;
+    UUnrealNexusData* NexusLoadedAsset = nullptr;
 
     UFUNCTION(BlueprintCallable)
     bool IsReadyToStream() { return true; }
@@ -133,12 +127,6 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0", ClampMax="30"))
     float TargetError = 2.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0"))
-    float RootNodesInitialError = 1e20;
-    
-    UPROPERTY(EditAnywhere)
-    EWindingOrder WindingOrder = EWindingOrder::Counter_Clockwise;
 
     UPROPERTY(EditAnywhere)
     bool bShowDebugStuff = false;

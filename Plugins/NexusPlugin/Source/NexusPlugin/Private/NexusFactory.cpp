@@ -1,6 +1,10 @@
 ﻿#include "NexusFactory.h"
+
+#include "AssetRegistryModule.h"
 #include "UnrealNexusData.h"
+#include "UnrealNexusNodeData.h"
 #include "NexusUtils.h"
+#include "NexusPlugin/Public/NodeDataFactory.h"
 
 void LogHeaderInfo(const Header& Header)
 {
@@ -44,7 +48,7 @@ UObject* UNexusFactory::FactoryCreateBinary(UClass* Class, UObject* InParent, co
         NexusImportedFile = nullptr;
     }
 
-    InitData(NexusImportedFile, BufferPtr);
+    InitData(NexusImportedFile, BufferPtr, Buffer);
     
     GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPostImport(this, NexusImportedFile);
     return NexusImportedFile;
@@ -63,8 +67,6 @@ bool UNexusFactory::ParseHeader(UUnrealNexusData* NexusData, uint8*& Buffer, con
         return false;
     }
     
-    uint8 RawHeader[Nexus_Header_Size];
-    uint8* Ptr = reinterpret_cast<uint8*>(&RawHeader);
     NexusData->Header.magic = Read32(Buffer); // 4 bytes
     if (NexusData->Header.magic != Nexus_Header_Magic)
     {
@@ -82,8 +84,6 @@ bool UNexusFactory::ParseHeader(UUnrealNexusData* NexusData, uint8*& Buffer, con
         { ReadFloat(Buffer), ReadFloat(Buffer), ReadFloat(Buffer)},
         ReadFloat(Buffer)
     }; // 72 + 16 = 88
-
-    check(Ptr - RawHeader == Nexus_Header_Size);
     
     LogHeaderInfo(NexusData->Header);
     return true;
@@ -94,37 +94,68 @@ bool UNexusFactory::ReadDataIntoNexusFile(UUnrealNexusData* UnrealNexusData, uin
     return ParseHeader(UnrealNexusData, Buffer, BufferEnd);
 }
 
-void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer)
+void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer, const uint8* FileBegin)
 {
     using namespace Utils;
     using namespace DataUtils;
-    
-    Data->Nodes = new Node[Data->Header.n_nodes];
-    Data->Patches = new Patch[Data->Header.n_patches];
-    Data->Textures = new Texture[Data->Header.n_textures];
-    Data->NodeData = new NodeData[Data->Header.n_nodes];
-    Data->TextureData = new TextureData[Data->Header.n_textures];
 
+    const auto PackagePath = Data->GetOutermost()->GetName();
+    // Read all nodes
+    UNodeDataFactory* NodeFactory = NewObject<UNodeDataFactory>();
     for (uint32 i = 0; i < Data->Header.n_nodes; i ++)
     {
-        Data->Nodes[i] = ReadNode(Buffer);
+        const auto Node = ReadNode(Buffer);
+        Data->Nodes.Add(FUnrealNexusNode {Node});
     }
-    
+
+    // Fill their NodeData memory
+    for (uint32 i = 0; i < Data->Header.n_nodes - 1; i ++)
+    {
+        
+        // Create a Node .uasset and register it
+        auto NodePathString = FString::Printf(TEXT("%s_Node%d"), *PackagePath, i);
+        UPackage* NodePackage = CreatePackage(nullptr, *NodePathString);
+        auto& UCurrentNode = Data->Nodes[i];
+        auto& UNextNode = Data->Nodes[i + 1];
+        auto NodeName = FPaths::GetBaseFilename(NodePathString);
+        UUnrealNexusNodeData* UNodeData = NodeFactory->CreateNodeAssetFile(NodePackage, NodeName);
+        UNodeData->NodeSize = UNextNode.NexusNode.getBeginOffset() - UCurrentNode.NexusNode.getBeginOffset();
+        UNodeData->NexusNodeData.memory = new char[UNodeData->NodeSize];
+        FMemory::Memcpy(UNodeData->NexusNodeData.memory, (FileBegin + UCurrentNode.NexusNode.getBeginOffset()), UNodeData->NodeSize);
+        UCurrentNode.NodeDataPath = UNodeData;
+    }
+
+    // Read patches
+    TArray<Patch> Patches;
+    Patches.SetNum(Data->Header.n_patches);
     for (uint32 i = 0; i < Data->Header.n_patches; i ++)
     {
-        Data->Patches[i] = ReadPatch(Buffer);
+        Patches[i] = ReadPatch(Buffer);
     }
-    
+
+    // Assign patches
+    for (uint32 i = 0; i < Data->Header.n_nodes - 1; i ++)
+    {
+        auto& Node = Data->Nodes[i];
+        auto& NextNode = Data->Nodes[i + 1];
+        const uint32 LastPatch = NextNode.NexusNode.first_patch;
+        for (uint32 PatchId = Node.NexusNode.first_patch; PatchId < LastPatch - 1; PatchId ++)
+        {
+            Node.NodePatches.Add(Patches[PatchId]);
+        }
+    }
     for (uint32 i = 0; i < Data->Header.n_textures; i ++)
     {
-        Data->Textures[i] = ReadTexture(Buffer);
+        // Data->Textures[i] = ReadTexture(Buffer);
     }
 
     //find number of roots:
     Data->RootsCount = Data->Header.n_nodes;
-    for(uint32_t j = 0; j < Data->RootsCount; j++) {
-        for(uint32_t i = Data->Nodes[j].first_patch; i < Data->Nodes[j].last_patch(); i++)
-            if(Data->Patches[i].node < Data->RootsCount)
-                Data->RootsCount = Data->Patches[i].node;
+    for(int j = 0; j < Data->RootsCount; j++) {
+        auto& Node = Data->Nodes[j].NexusNode;
+        auto& LastNode = Data->Nodes[j + 1].NexusNode;
+        for(uint32_t i = Node.first_patch; i < LastNode.first_patch; i++)
+            if(Patches[i].node < static_cast<UINT32>(Data->RootsCount))
+                Data->RootsCount = Patches[i].node;
     }
 }

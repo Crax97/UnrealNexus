@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "dag.h"
 #include "signature.h"
+#include "Engine/StreamableManager.h"
 
 namespace nx {
     class NexusFile;
@@ -89,3 +90,5 @@ namespace DataUtils {
     nx::Patch ReadPatch(uint8*& Buffer);
     nx::Texture ReadTexture(uint8*& Buffer);
 }
+
+FStreamableManager& GetStreamableManager();

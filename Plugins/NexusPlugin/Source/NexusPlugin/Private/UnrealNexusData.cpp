@@ -1,14 +1,20 @@
 ﻿#include "UnrealNexusData.h"
+#include "UnrealNexusNodeData.h"
 #include "NexusUtils.h"
 
 #include "corto/decoder.h"
+#include "Engine/StreamableManager.h"
+#include "HAL/FileManagerGeneric.h"
 // #include "space/intersection3.h"
 // #include "space/line3.h"
 
+class FArchiveFileReaderGeneric;
 DEFINE_LOG_CATEGORY(NexusInfo);
 DEFINE_LOG_CATEGORY(NexusErrors);
 
+
 using namespace nx;
+
 
 class FDNode {
 public:
@@ -38,12 +44,6 @@ void LoadImageRawData(UTexture2D* Image, TextureData& Data)
 
 UUnrealNexusData::~UUnrealNexusData()
 {
-    Nodes = new Node[Header.n_nodes];
-    Patches = new Patch[Header.n_patches];
-    Textures = new Texture[Header.n_textures];
-    NodeData = new nx::NodeData[Header.n_nodes];
-    TextureData = new nx::TextureData[Header.n_textures];
-
 }
 
 vcg::Sphere3f& UUnrealNexusData::BoundingSphere()
@@ -99,8 +99,8 @@ auto UUnrealNexusData::Intersects(vcg::Ray3f& Ray, float& Distance) -> bool
     	Candidates.pop_back();
 
     	if(Candidate.Dist > Distance) break;
-
-    	Node &Node = Nodes[Candidate.Node];
+    	auto& UNode = Nodes[Candidate.Node];
+    	Node& Node = UNode.NexusNode;
 
     	if(Node.first_patch  == Sink) {
     		if(Candidate.Dist < Distance) {
@@ -112,12 +112,13 @@ auto UUnrealNexusData::Intersects(vcg::Ray3f& Ray, float& Distance) -> bool
 
     	//not a leaf, insert children (if they intersect
     	for(uint32_t i = Node.first_patch; i < Node.last_patch(); i++) {
-            const uint32_t Child = Patches[i].node;
+            const uint32_t Child = UNode.NodePatches[i].node;
     		if(Child == Sink) continue;
     		if(Visited[Child]) continue;
 
+    		nx::Node& ChildNode = Nodes[Child].NexusNode;
     		float d;
-    		if(Closest(Nodes[Child].sphere, Ray, d)) {
+    		if(Closest(ChildNode.sphere, Ray, d)) {
     			Candidates.push_back(FDNode(Child, d));
     			push_heap(Candidates.begin(), Candidates.end());
     			Visited[Child] = true;
@@ -128,18 +129,95 @@ auto UUnrealNexusData::Intersects(vcg::Ray3f& Ray, float& Distance) -> bool
     return Hit;
 }
 
-uint32_t UUnrealNexusData::Size(const uint32_t Node) const
+uint32_t UUnrealNexusData::Size(const uint32_t Node)
 {
-    return Nodes[Node].getSize();
+    return Nodes[Node].NexusNode.getSize();
+}
+
+void UUnrealNexusData::LoadNodeAsync(const UINT32 NodeID, const FStreamableDelegate Callback)
+{
+	if (NodeHandles.Contains(NodeID))
+	{
+		auto& Handle = NodeHandles[NodeID];
+		if (Handle->HasLoadCompleted())
+		{
+			Callback.ExecuteIfBound();
+		}
+	} else
+	{
+		const FSoftObjectPath NodePath = Nodes[NodeID].NodeDataPath;
+		check(NodePath.IsValid());
+		NodeHandles.Add(NodeID, GetStreamableManager().RequestAsyncLoad({NodePath}, Callback));
+	}
+}
+
+UUnrealNexusNodeData* UUnrealNexusData::GetNode(const UINT32 NodeId)
+{
+	UUnrealNexusNodeData* Node = nullptr;
+	const FSoftObjectPath NodePath = Nodes[NodeId].NodeDataPath;
+	if (!NodePath.IsValid())
+	{
+		return Cast<UUnrealNexusNodeData>(GetStreamableManager().LoadSynchronous(NodePath));
+	}
+	return Cast<UUnrealNexusNodeData>(NodePath.ResolveObject());
 }
 
 void UUnrealNexusData::Serialize(FArchive& Archive)
 {
 	Super::Serialize(Archive);
-	SerializeHeader(Archive);
 	SerializeNodes(Archive);
-	SerializePatches(Archive);
+	SerializeHeader(Archive);
 	SerializeTextures(Archive);
+}
+
+void SerializeNodePatches(FArchive& Archive, TArray<nx::Patch>& NodePatches) 
+{
+	int PatchesCount = NodePatches.Num();
+	Archive << PatchesCount;
+	if (PatchesCount == NodePatches.Num())
+	{
+		for(auto& Patch : NodePatches)
+		{
+			Archive << Patch.node;
+			Archive << Patch.triangle_offset;
+			Archive << Patch.texture;
+		}
+	} else
+	{
+		for(int i = 0; i < PatchesCount; i ++)
+		{
+			nx::Patch Patch;
+			Archive << Patch.node;
+			Archive << Patch.triangle_offset;
+			Archive << Patch.texture;
+			NodePatches.Add(Patch);
+		}		
+	}
+}
+
+void SerializeNode(FArchive& Archive, nx::Node& Node)
+{
+	Archive << Node.offset;
+	Archive << Node.nvert;
+	Archive << Node.nface;
+	Archive << Node.error;
+	Archive << Node.cone.n[0];
+	Archive << Node.cone.n[1];
+	Archive << Node.cone.n[2];
+	Archive << Node.cone.n[3];
+	Archive << Node.sphere.Center().X();
+	Archive << Node.sphere.Center().Y();
+	Archive << Node.sphere.Center().Z();
+	Archive << Node.sphere.Radius();
+	Archive << Node.tight_radius;
+	Archive << Node.first_patch;
+}
+
+void FUnrealNexusNode::Serialize(FArchive& Ar)
+{
+	SerializeNode(Ar, NexusNode);
+	SerializeNodePatches(Ar, NodePatches);
+	Ar << NodeDataPath;
 }
 
 void UUnrealNexusData::SerializeHeader(FArchive& Archive)
@@ -197,39 +275,30 @@ void UUnrealNexusData::SerializeSphere(FArchive& Archive, const vcg::Sphere3f& S
 	Archive << Radius;
 }
 
-void UUnrealNexusData::SerializeNodes(FArchive& Archive) const
+void UUnrealNexusData::SerializeNodes(FArchive& Archive)
 {
-	for (uint32 i = 0; i < Header.n_nodes; i ++)
+	int NodesNum = Nodes.Num();
+	Archive << NodesNum;
+	if (NodesNum == Nodes.Num())
 	{
-		auto& Node = Nodes[i];
-		Archive << Node.offset;
-		Archive << Node.nvert;
-		Archive << Node.nface;
-		Archive << Node.error;
-		Archive << Node.cone.n[0];
-		Archive << Node.cone.n[1];
-		Archive << Node.cone.n[2];
-		Archive << Node.cone.n[3];
-		Archive << Node.cone.n[0];
-		SerializeSphere(Archive, Node.sphere);
-		Archive << Node.tight_radius;
-		Archive << Node.first_patch;
-	}
-}
-
-void UUnrealNexusData::SerializePatches(FArchive& Archive) const
-{
-	for (uint32 i = 0; i < Header.n_patches; i ++)
+		for (int i = 0; i < Nodes.Num(); i ++)
+		{
+			Nodes[i].Serialize(Archive);
+		}
+	} else
 	{
-		auto& Patch = Patches[i];
-		Archive << Patch.node;
-		Archive << Patch.triangle_offset;
-		Archive << Patch.texture;
+		for (int i = 0; i < Nodes.Num(); i ++)
+		{
+			FUnrealNexusNode NewNode;
+			NewNode.Serialize(Archive);
+			Nodes.Add(NewNode);
+		}
 	}
 }
 
 void UUnrealNexusData::SerializeTextures(FArchive& Archive) const
 {
+	/*
 	for (uint32 i = 0; i < Header.n_textures; i ++)
 	{
 		auto& Texture = Textures[i];
@@ -239,6 +308,7 @@ void UUnrealNexusData::SerializeTextures(FArchive& Archive) const
 			Archive << Texture.matrix[Mij];
 		}
 	}
+	*/
 }
 
 UUnrealNexusData::UUnrealNexusData() {}
