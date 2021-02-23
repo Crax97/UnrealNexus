@@ -139,7 +139,7 @@ void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer, const uint8
         auto& Node = Data->Nodes[i];
         auto& NextNode = Data->Nodes[i + 1];
         const uint32 LastPatch = NextNode.NexusNode.first_patch;
-        for (uint32 PatchId = Node.NexusNode.first_patch; PatchId < LastPatch - 1; PatchId ++)
+        for (uint32 PatchId = Node.NexusNode.first_patch; PatchId < LastPatch; PatchId ++)
         {
             Node.NodePatches.Add(Patches[PatchId]);
         }

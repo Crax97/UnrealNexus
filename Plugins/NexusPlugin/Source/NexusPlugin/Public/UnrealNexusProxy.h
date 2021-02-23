@@ -91,8 +91,7 @@ public:
                                 const int InMaxCacheSize = 512 *(1<<20));
 
     ~FUnrealNexusProxy();
-
-    void LoadGPUData(const uint32 N);
+    void LoadGPUData(uint32 N);
     void DropGPUData(uint32 N);
     
     float GetCurrentError() const

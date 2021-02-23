@@ -25,10 +25,10 @@ class UUnrealNexusData final : public UObject
     void SerializeHeader(FArchive& Archive);
 
     void SerializeSignature(FArchive& Archive);
-    static void SerializeAttribute(FArchive& Archive, const Attribute& Attribute);
-    static void SerializeVertexAttributes(FArchive& Archive, const VertexElement& Vertex);
-    static void SerializeFaceAttributes(FArchive& Archive, const FaceElement& Face);
-    static void SerializeSphere(FArchive& Archive, const vcg::Sphere3f& Sphere);
+    static void SerializeAttribute(FArchive& Archive, Attribute& Attribute);
+    static void SerializeVertexAttributes(FArchive& Archive, VertexElement& Vertex);
+    static void SerializeFaceAttributes(FArchive& Archive, FaceElement& Face);
+    static void SerializeSphere(FArchive& Archive, vcg::Sphere3f& Sphere);
     void SerializeNodes(FArchive& Archive);
     // void SerializePatches(FArchive& Archive) const;
     void SerializeTextures(FArchive& Archive) const;

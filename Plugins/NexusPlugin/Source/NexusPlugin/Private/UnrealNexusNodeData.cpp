@@ -1,5 +1,8 @@
 ﻿#include "UnrealNexusNodeData.h"
-void SerializeNodeData(FArchive& Archive, nx::NodeData& NodeData, UINT32 NodeSize)
+
+#include "NexusUtils.h"
+
+void SerializeNodeData(FArchive& Archive, nx::NodeData& NodeData, UINT32& NodeSize)
 {
     Archive << NodeSize;
 
@@ -12,7 +15,9 @@ void SerializeNodeData(FArchive& Archive, nx::NodeData& NodeData, UINT32 NodeSiz
     
     for (UINT32 i = 0; i < NodeSize; i ++)
     {
-        Archive << NodeData.memory[i];
+        UINT16 Index = NodeData.memory[i];
+        Archive << Index;
+        NodeData.memory[i] = Index;
     }
 }
 

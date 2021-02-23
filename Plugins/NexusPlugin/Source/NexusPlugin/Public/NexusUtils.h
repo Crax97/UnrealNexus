@@ -1,10 +1,13 @@
 ﻿#pragma once
 #include "dag.h"
 #include "signature.h"
+#include "UnrealNexusData.h"
 #include "Engine/StreamableManager.h"
 
 namespace nx {
     class NexusFile;
+    class Signature;
+    class NodeData;
 }
 
 DECLARE_LOG_CATEGORY_EXTERN(NexusInfo, Log, All)
@@ -89,6 +92,11 @@ namespace DataUtils {
     nx::Node ReadNode(uint8*& Buffer);
     nx::Patch ReadPatch(uint8*& Buffer);
     nx::Texture ReadTexture(uint8*& Buffer);
+}
+
+namespace LoadUtils
+{
+    void LoadNodeData(Header& Header, Node& TheNode, NodeData& TheNodeData, UINT64 DataSizeOnDisk);
 }
 
 FStreamableManager& GetStreamableManager();

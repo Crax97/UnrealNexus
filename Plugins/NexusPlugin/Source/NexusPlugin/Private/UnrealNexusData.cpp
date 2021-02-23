@@ -141,19 +141,21 @@ void UUnrealNexusData::LoadNodeAsync(const UINT32 NodeID, const FStreamableDeleg
 		auto& Handle = NodeHandles[NodeID];
 		if (Handle->HasLoadCompleted())
 		{
-			Callback.ExecuteIfBound();
+			if(!Callback.ExecuteIfBound()) {
+				// Log this
+			}
 		}
 	} else
 	{
 		const FSoftObjectPath NodePath = Nodes[NodeID].NodeDataPath;
 		check(NodePath.IsValid());
-		NodeHandles.Add(NodeID, GetStreamableManager().RequestAsyncLoad({NodePath}, Callback));
+		const auto Handle = GetStreamableManager().RequestAsyncLoad({NodePath}, Callback);
+		NodeHandles.Add(NodeID, Handle);
 	}
 }
 
 UUnrealNexusNodeData* UUnrealNexusData::GetNode(const UINT32 NodeId)
 {
-	UUnrealNexusNodeData* Node = nullptr;
 	const FSoftObjectPath NodePath = Nodes[NodeId].NodeDataPath;
 	if (!NodePath.IsValid())
 	{
@@ -165,8 +167,8 @@ UUnrealNexusNodeData* UUnrealNexusData::GetNode(const UINT32 NodeId)
 void UUnrealNexusData::Serialize(FArchive& Archive)
 {
 	Super::Serialize(Archive);
-	SerializeNodes(Archive);
 	SerializeHeader(Archive);
+	SerializeNodes(Archive);
 	SerializeTextures(Archive);
 }
 
@@ -239,15 +241,13 @@ void UUnrealNexusData::SerializeSignature(FArchive& Archive)
 	Archive << Header.signature.flags;
 }
 
-void UUnrealNexusData::SerializeAttribute(FArchive& Archive, const Attribute& Attribute)
+void UUnrealNexusData::SerializeAttribute(FArchive& Archive, Attribute& Attribute)
 {
-	uint8 Type = Attribute.type;
-	uint8 Number = Attribute.number;
-	Archive.Serialize(reinterpret_cast<void*>(&Type), 1);
-	Archive.Serialize(reinterpret_cast<void*>(&Number), 1);
+	Archive << Attribute.type;
+	Archive <<  Attribute.number;
 }
 
-void UUnrealNexusData::SerializeVertexAttributes(FArchive& Archive, const VertexElement& Vertex)
+void UUnrealNexusData::SerializeVertexAttributes(FArchive& Archive, VertexElement& Vertex)
 {
 	for (int Index = 0; Index < 8; Index ++)
 	{
@@ -255,7 +255,7 @@ void UUnrealNexusData::SerializeVertexAttributes(FArchive& Archive, const Vertex
 	}
 }
 
-void UUnrealNexusData::SerializeFaceAttributes(FArchive& Archive, const FaceElement& Face)
+void UUnrealNexusData::SerializeFaceAttributes(FArchive& Archive, FaceElement& Face)
 {
 	for (int Index = 0; Index < 8; Index ++)
 	{
@@ -263,16 +263,12 @@ void UUnrealNexusData::SerializeFaceAttributes(FArchive& Archive, const FaceElem
 	}
 }
 
-void UUnrealNexusData::SerializeSphere(FArchive& Archive, const vcg::Sphere3f& Sphere)
+void UUnrealNexusData::SerializeSphere(FArchive& Archive, vcg::Sphere3f& Sphere)
 {
-	auto X = Sphere.Center().X();
-	auto Y = Sphere.Center().Y();
-	auto Z = Sphere.Center().Z();
-	auto Radius = Sphere.Radius();
-	Archive << X;
-	Archive << Y;
-	Archive << Z;
-	Archive << Radius;
+	Archive << Sphere.Center().X();
+	Archive << Sphere.Center().Y();
+	Archive << Sphere.Center().Z();
+	Archive << Sphere.Radius();
 }
 
 void UUnrealNexusData::SerializeNodes(FArchive& Archive)

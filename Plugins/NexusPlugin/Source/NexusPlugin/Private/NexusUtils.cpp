@@ -1,5 +1,12 @@
 ﻿#include "NexusUtils.h"
 
+#include "dag.h"
+#include "nexusdata.h"
+#include "UnrealNexusData.h"
+#include "UnrealNexusNodeData.h"
+#include "corto/decoder.h"
+#include "Kismet/KismetArrayLibrary.h"
+
 nx::Node DataUtils::ReadNode(uint8*& Buffer)
 {
 
@@ -46,6 +53,107 @@ nx::Texture DataUtils::ReadTexture(uint8*& Buffer)
         Tex.matrix[i] = ReadFloat(Buffer);
     }
     return Tex;
+}
+
+void LoadUtils::LoadNodeData(Header& Header, Node& TheNode, NodeData& TheNodeData, const UINT64 DataSizeOnDisk)
+{
+	nx::Signature& Signature = Header.signature;
+	if (!Signature.isCompressed())
+	{
+		return;
+	} else if (Signature.flags & nx::Signature::CORTO)
+	{
+		const UINT32 RealSize = TheNode.nvert * Signature.vertex.size() + TheNode.nface * Signature.face.size();
+		char* Buffer = new char[DataSizeOnDisk];
+		FMemory::Memcpy(Buffer, TheNodeData.memory, DataSizeOnDisk);
+		delete[] TheNodeData.memory;
+		TheNodeData.memory = new char[RealSize];
+		UINT32 Magic = *reinterpret_cast<UINT32*>(Buffer);
+		char Magic0 = Buffer[0];
+		char Magic1 = Buffer[1];
+		char Magic2 = Buffer[2];
+		char Magic3 = Buffer[3];
+
+		try
+		{
+			crt::Decoder Decoder(DataSizeOnDisk, reinterpret_cast<unsigned char*>(Buffer));
+			Decoder.setPositions(reinterpret_cast<float*>(TheNodeData.coords()));
+			if(Signature.vertex.hasNormals())
+				Decoder.setNormals(reinterpret_cast<int16_t*>(TheNodeData.normals(Signature, TheNode.nvert)));
+			if(Signature.vertex.hasColors())
+				Decoder.setColors(reinterpret_cast<unsigned char*>(TheNodeData.colors(Signature, TheNode.nvert)));
+			if(Signature.vertex.hasTextures())
+				Decoder.setUvs(reinterpret_cast<float*>(TheNodeData.texCoords(Signature, TheNode.nvert)));
+			if(TheNode.nface)
+				Decoder.setIndex(TheNodeData.faces(Signature, TheNode.nvert));
+
+			Decoder.decode();
+		} catch (const char* Error)
+		{
+			UE_LOG(NexusInfo, Error, TEXT("WHAT THE FUCK %s"), ANSI_TO_TCHAR(Error));
+		}
+        // delete Buffer;
+    } else if (Signature.isCompressed())
+    {
+        UE_LOG(NexusInfo, Error, TEXT("Only CORTO compression is supported"));
+        return;
+    }
+	
+	// Shuffle points in compressed point clouds
+	if(!Signature.face.hasIndex()) {
+		TArray<int> Order;
+		Order.SetNum(TheNode.nvert);
+		for(int i = 0; i < TheNode.nvert; i++)
+			Order[i] = i;
+
+		UKismetArrayLibrary::Array_Shuffle(Order);
+			
+		TArray<vcg::Point3f> Coords;
+		Coords.SetNum(TheNode.nvert);
+		for(int i = 0; i < TheNode.nvert; i++)
+			Coords[i] = TheNodeData.coords()[Order[i]];
+		FMemory::Memcpy(TheNodeData.coords(), Coords.GetData(), sizeof(vcg::Point3f) * TheNode.nvert);
+
+		if(Signature.vertex.hasNormals()) {
+			vcg::Point3s *n = TheNodeData.normals(Signature, TheNode.nvert);
+            TArray<vcg::Point3s> Normals;
+            Normals.SetNum(TheNode.nvert);
+			for(int i = 0; i < TheNode.nvert; i++)
+                Normals[i] = n[Order[i]];
+			FMemory::Memcpy(n, Normals.GetData(), sizeof(vcg::Point3f) * TheNode.nvert);
+		}
+
+		if(Signature.vertex.hasColors()) {
+			vcg::Color4b *c = TheNodeData.colors(Signature, TheNode.nvert);
+            TArray<vcg::Color4b> Colors;
+            Colors.SetNum(TheNode.nvert);
+			for(int i =0; i < TheNode.nvert; i++)
+				Colors[i] = c[Order[i]];
+			FMemory::Memcpy(c, Colors.GetData(), sizeof(vcg::Color4b) * TheNode.nvert);
+		}
+	}
+
+#if 0
+	if(Header.n_textures) {
+		//be sure to load images
+		for(uint32_t p = TheNode.first_patch; p < Node.last_patch(); p++) {
+			uint32_t t = patches[p].texture;
+			if(t == 0xffffffff) continue;
+
+			TextureData &TexData = texturedata[t];
+			TexData.count_ram++;
+			if(TexData.count_ram > 1)
+				continue;
+
+			Texture &Tex = textures[t];
+			TexData.memory = static_cast<char*>(file->map(Tex.getBeginOffset(), Tex.getSize()));
+			checkf(TexData.memory, TEXT("Failed mapping texture data"));
+
+			loadImageFromData(TexData, t);
+		}
+	}
+#endif
+    
 }
 
 FStreamableManager& GetStreamableManager()

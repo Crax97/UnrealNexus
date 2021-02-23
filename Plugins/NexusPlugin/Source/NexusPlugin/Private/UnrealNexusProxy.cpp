@@ -125,9 +125,9 @@ void FNexusNodeRenderData::CalculateTangents(TArray<FPackedNormal>& OutTangents,
     // Step 1: Find per-face T Vectors
     for (uint32 Index = 0; Index < Node.nface; Index += 3)
     {
-        const uint32 Index1 = Indices[Index * 3 + 0];
-        const uint32 Index2 = Indices[Index * 3 + 1];
-        const uint32 Index3 = Indices[Index * 3 + 2];
+        const uint32 Index1 = Indices[Index + 0];
+        const uint32 Index2 = Indices[Index + 1];
+        const uint32 Index3 = Indices[Index + 2];
 
         Counts[Index1] ++;
         Counts[Index2] ++;
@@ -399,6 +399,10 @@ void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
     ComponentData->LoadNodeAsync(BestNodeID, FStreamableDelegate::CreateLambda([&, BestNodeID]()
     {
         Component->SetNodeStatus(BestNodeID, ENodeStatus::Loaded);
+        const auto UCurrentNodeData = ComponentData->GetNode(BestNodeID);
+        auto& UCurrentNode = ComponentData->Nodes[BestNodeID];
+        
+        LoadUtils::LoadNodeData(ComponentData->Header, UCurrentNode.NexusNode, UCurrentNodeData->NexusNodeData, UCurrentNodeData->NodeSize);
         LoadGPUData(BestNodeID);
         UE_LOG(NexusInfo, Log, TEXT("Loaded Nexus node with index %d"), BestNodeID);
     }));
@@ -431,7 +435,7 @@ void FUnrealNexusProxy::LoadGPUData(const uint32 N)
     auto& TheNode = ComponentData->Nodes[N].NexusNode;
     auto* TheNodeData = ComponentData->GetNode(N);
     NodeData& TheData = TheNodeData->NexusNodeData;
-    check(TheData.memory);
+    check(TheNodeData->NexusNodeData.memory);
 
     this->PendingCount ++;
     this->CurrentCacheSize += TheNode.getSize();
@@ -491,7 +495,7 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
         int EndIndex = 0;
         for (UINT32 PatchId = CurrentNode.NexusNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
         {
-            const Patch& CurrentNodePatch = CurrentNode.NodePatches[PatchId];
+            const Patch& CurrentNodePatch = CurrentNode.NodePatches[PatchId - CurrentNode.NexusNode.first_patch];
             const UINT32 ChildNode = CurrentNodePatch.node;
             if (!SelectedNodes.Contains(ChildNode))
             {
