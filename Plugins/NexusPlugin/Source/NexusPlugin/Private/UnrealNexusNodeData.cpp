@@ -1,8 +1,16 @@
 ﻿#include "UnrealNexusNodeData.h"
+#include "UnrealNexusData.h"
 
 #include "NexusUtils.h"
 
-void SerializeNodeData(FArchive& Archive, nx::NodeData& NodeData, UINT32& NodeSize)
+void UUnrealNexusNodeData::DecodeData(Header& Header, const int VertsCount, const int FacesCount)
+{
+    if (DidDecodeData) return;
+    LoadUtils::LoadNodeData(Header, VertsCount, FacesCount, NexusNodeData, NodeSize);
+    DidDecodeData = true;
+}
+
+void UUnrealNexusNodeData::SerializeNodeData(FArchive& Archive, nx::NodeData& NodeData)
 {
     Archive << NodeSize;
 
@@ -19,10 +27,11 @@ void SerializeNodeData(FArchive& Archive, nx::NodeData& NodeData, UINT32& NodeSi
         Archive << Index;
         NodeData.memory[i] = Index;
     }
+    
 }
 
 void UUnrealNexusNodeData::Serialize(FArchive& Archive)
 {
     Super::Serialize(Archive);
-    SerializeNodeData(Archive, NexusNodeData, NodeSize);
+    SerializeNodeData(Archive, NexusNodeData);
 }

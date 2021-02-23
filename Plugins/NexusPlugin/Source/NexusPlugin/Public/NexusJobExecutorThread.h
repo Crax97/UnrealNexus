@@ -11,8 +11,9 @@ enum class EJobKind : uint8
 };
 struct FNexusJob
 {
-    EJobKind Kind;
     uint32 NodeIndex;
+    class UUnrealNexusNodeData* NodeData;
+    struct FUnrealNexusNode* Node;
     class UUnrealNexusData* Data;
 };
 

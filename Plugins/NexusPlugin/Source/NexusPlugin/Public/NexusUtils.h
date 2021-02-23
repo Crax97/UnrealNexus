@@ -96,7 +96,7 @@ namespace DataUtils {
 
 namespace LoadUtils
 {
-    void LoadNodeData(Header& Header, Node& TheNode, NodeData& TheNodeData, UINT64 DataSizeOnDisk);
+    void LoadNodeData(Header& Header, int VertCount, int FacesCount, NodeData& TheNodeData, const UINT64 DataSizeOnDisk);
 }
 
 FStreamableManager& GetStreamableManager();

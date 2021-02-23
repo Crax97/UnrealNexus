@@ -121,6 +121,7 @@ void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer, const uint8
         UUnrealNexusNodeData* UNodeData = NodeFactory->CreateNodeAssetFile(NodePackage, NodeName);
         UNodeData->NodeSize = UNextNode.NexusNode.getBeginOffset() - UCurrentNode.NexusNode.getBeginOffset();
         UNodeData->NexusNodeData.memory = new char[UNodeData->NodeSize];
+
         FMemory::Memcpy(UNodeData->NexusNodeData.memory, (FileBegin + UCurrentNode.NexusNode.getBeginOffset()), UNodeData->NodeSize);
         UCurrentNode.NodeDataPath = UNodeData;
     }

@@ -398,17 +398,16 @@ void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
     Component->SetNodeStatus(BestNodeID, ENodeStatus::Pending);
     ComponentData->LoadNodeAsync(BestNodeID, FStreamableDelegate::CreateLambda([&, BestNodeID]()
     {
-        Component->SetNodeStatus(BestNodeID, ENodeStatus::Loaded);
+        // Two passes: 1) Load the Unreal node data
+        if (LoadedMeshData.Contains(BestNodeID)) return;
         const auto UCurrentNodeData = ComponentData->GetNode(BestNodeID);
-        auto& UCurrentNode = ComponentData->Nodes[BestNodeID];
-        
-        LoadUtils::LoadNodeData(ComponentData->Header, UCurrentNode.NexusNode, UCurrentNodeData->NexusNodeData, UCurrentNodeData->NodeSize);
-        LoadGPUData(BestNodeID);
-        UE_LOG(NexusInfo, Log, TEXT("Loaded Nexus node with index %d"), BestNodeID);
-    }));
-    // JobExecutor->AddNewJobs({ FNexusJob{ EJobKind::Load, BestNodeID, nullptr } });
+        auto* UCurrentNode = &ComponentData->Nodes[BestNodeID];
 
-    /*
+        // 2) Decode it in a separate thread
+        JobExecutor->AddNewJobs( {FNexusJob { BestNodeID, UCurrentNodeData, UCurrentNode, ComponentData}});
+    }));
+
+    
     FNexusJob DoneJob;
     TQueue<FNexusJob>& FinishedJobs = JobExecutor->GetJobsDone();
     while (FinishedJobs.Dequeue(DoneJob))
@@ -417,7 +416,6 @@ void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
         LoadGPUData(DoneJob.NodeIndex);
         UE_LOG(NexusInfo, Log, TEXT("Loaded Nexus node with index %d"), DoneJob.NodeIndex);
     }
-    */
 }
 
 FUnrealNexusProxy::~FUnrealNexusProxy()

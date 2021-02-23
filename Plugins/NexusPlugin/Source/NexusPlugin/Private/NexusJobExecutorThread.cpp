@@ -2,6 +2,7 @@
 
 #include "nexusfile.h"
 #include "UnrealNexusData.h"
+#include "UnrealNexusNodeData.h"
 
 FNexusJobExecutorThread::FNexusJobExecutorThread(nx::NexusFile* InFile)
     : File(InFile)
@@ -24,14 +25,11 @@ uint32 FNexusJobExecutorThread::Run()
         FNexusJob Job;
         while(QueuedJobs.Dequeue(Job))
         {
-            if (Job.Kind == EJobKind::Load)
-            {
-//                Job.Data->LoadIntoRam(Job.NodeIndex);
-                JobsDone.Enqueue(Job);
-            } else // if (Job.Kind == EJobKind::Drop) 
-            {
-//                Job.Data->DropFromRam(Job.NodeIndex);
-            }
+            auto NodeId = Job.NodeIndex;
+            auto& Node = Job.Node;
+            auto& Data = Job.NodeData;
+            Data->DecodeData(Job.Data->Header, Node->NexusNode.nvert, Node->NexusNode.nface);
+            JobsDone.Enqueue(Job);
         }
 #ifdef NEXUS_RUNNING_QUEUE_TESTS
         float MaxSleepTime = 0.5f;
