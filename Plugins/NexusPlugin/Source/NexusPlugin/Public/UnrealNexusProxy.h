@@ -60,14 +60,9 @@ protected:
     bool bIsPlaying = false;
     
     int PendingCount = 0;
-    int CurrentCacheSize = 0;
     int MaxPending = 0;
-    int MaxCacheSize = 0;
     int MinFPS = 15;
 
-    const float TargetError = 2.0f;
-    const float MaxError = 15.0f;
-    float CurrentError = TargetError;
     mutable int TotalRenderedCount = 0;
     FMaterialRenderProxy* MaterialProxy;
 
@@ -87,17 +82,11 @@ protected:
     void EndFrame();
     
 public:
-    explicit FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending = 5,
-                                const int InMaxCacheSize = 512 *(1<<20));
+    explicit FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending = 5);
 
     ~FUnrealNexusProxy();
     void LoadGPUData(uint32 N);
     void DropGPUData(uint32 N);
-    
-    float GetCurrentError() const
-    {
-        return CurrentError;
-    }
     
     virtual SIZE_T GetTypeHash() const override
     {

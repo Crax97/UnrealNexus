@@ -27,6 +27,7 @@ UUnrealNexusComponent::UUnrealNexusComponent(const FObjectInitializer& Initializ
     PrimaryComponentTick.bCanEverTick = true;
     PrimaryComponentTick.SetTickFunctionEnable(true);
     bWantsInitializeComponent = true;
+    CurrentCacheSize = 0;
 }
 
 UUnrealNexusComponent::~UUnrealNexusComponent()
@@ -35,7 +36,7 @@ UUnrealNexusComponent::~UUnrealNexusComponent()
     NodeStatuses.GetKeys(LoadedIDs);
     for (const int N : LoadedIDs)
     {
-        // NexusLoadedAsset->DropFromRam(N);
+        NexusLoadedAsset->UnloadNode(N);
     }
     
     if (Proxy && Proxy->IsReady())
@@ -69,7 +70,7 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
     float CalculatedError = SelectedNode->error / (CameraInfo.CurrentResolution * ViewpointDistanceToBoundingSphere);
     
     const float BoundingSphereDistanceFromViewFrustum = CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SelectedNode->tight_radius);
-
+    
     if (BoundingSphereDistanceFromViewFrustum < -SphereRadius)
     {
         CalculatedError /= Outer_Node_Factor + 1.0f;
@@ -114,7 +115,7 @@ FPrimitiveSceneProxy* UUnrealNexusComponent::CreateSceneProxy()
 
 void UUnrealNexusComponent::Update(float DeltaSeconds)
 {
-    Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), 1000.0f));
+    Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), NexusLoadedAsset->BoundingSphere().Radius()));
     UpdateBounds();
     if ( !Proxy) return;
     UpdateCameraView();
@@ -140,11 +141,11 @@ void UUnrealNexusComponent::UpdateCameraView()
     FSceneView* SceneView = Player->CalcSceneView(&ViewFamily, CameraInfo.ViewpointLocation, CameraInfo.ViewpointRotation, Viewport);
 
     CameraInfo.ViewportSize = Viewport->GetSizeXY();
-    const auto WorldToModelMatrix = GetComponentTransform().ToInverseMatrixWithScale();
+    CameraInfo.WorldToModelMatrix = GetComponentTransform().ToInverseMatrixWithScale();
     // TODO: Check(SceneView)
 
     CameraInfo.ViewFrustum = SceneView->ViewFrustum;
-    CameraInfo.ViewpointLocation = WorldToModelMatrix.TransformPosition(SceneView->ViewLocation);
+    CameraInfo.ViewpointLocation = CameraInfo.WorldToModelMatrix.TransformPosition(SceneView->ViewLocation);
 
     FVector ScreenMiddle, ScreenLeft, ScreenRight;
     FVector ScreenMiddleDir, ScreenLeftDir, ScreenRightDir;
@@ -152,16 +153,16 @@ void UUnrealNexusComponent::UpdateCameraView()
     FirstController->DeprojectScreenPositionToWorld(0, CameraInfo.ViewportSize.Y / 2, ScreenLeft, ScreenLeftDir);
     FirstController->DeprojectScreenPositionToWorld(CameraInfo.ViewportSize.X, CameraInfo.ViewportSize.Y / 2, ScreenRight, ScreenRightDir);
 
-    ScreenLeft = WorldToModelMatrix.TransformPosition(ScreenLeft);
-    ScreenMiddle = WorldToModelMatrix.TransformPosition(ScreenMiddle);
-    ScreenRight = WorldToModelMatrix.TransformPosition(ScreenRight);
+    ScreenLeft = CameraInfo.WorldToModelMatrix.TransformPosition(ScreenLeft);
+    ScreenMiddle = CameraInfo.WorldToModelMatrix.TransformPosition(ScreenMiddle);
+    ScreenRight = CameraInfo.WorldToModelMatrix.TransformPosition(ScreenRight);
 
     
     // Transforming everything into model space
     for (UINT32 i = 0; i < 5; i ++)
     {
         FPlane& Current = CameraInfo.ViewFrustum.Planes[i];
-        Current = WorldToModelMatrix.TransformPosition(Current.Flip());
+        Current = CameraInfo.WorldToModelMatrix.TransformPosition(Current.Flip());
     }
     
     const float SideLengthWorldSpace = (ScreenRight - ScreenLeft).Size();
@@ -170,10 +171,6 @@ void UUnrealNexusComponent::UpdateCameraView()
     const int ViewportWidth = CameraInfo.ViewportSize.X;
     const float ResolutionThisFrame = (2 * SideLengthWorldSpace / DistanceToCenter) / ViewportWidth;
 
-    
-    CameraInfo.IsUsingSameResolutionAsBefore = CameraInfo.CurrentResolution == ResolutionThisFrame;
-    CameraInfo.CurrentResolution = ResolutionThisFrame;
-
     if (bShowDebugStuff)
     {
         DrawDebugBox(GetWorld(), CameraInfo.ViewpointLocation, FVector(10.0f), FQuat::Identity, FColor::Purple);
@@ -181,6 +178,8 @@ void UUnrealNexusComponent::UpdateCameraView()
         DrawDebugPoint(GetWorld(), ScreenMiddle, 20.0f, FColor::White);
         DrawDebugPoint(GetWorld(), ScreenRight, 20.0f, FColor::Red);
     }
+    CameraInfo.IsUsingSameResolutionAsBefore = CameraInfo.CurrentResolution == ResolutionThisFrame;
+    CameraInfo.CurrentResolution = ResolutionThisFrame;
 }
 
 FVector UUnrealNexusComponent::VcgPoint3FToVector(const vcg::Point3f& Point3)
@@ -212,14 +211,13 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
     TSet<UINT32>& BlockedNodes = TraversalData.BlockedNodes, &SelectedNodes = TraversalData.SelectedNodes;
     TArray<float>& InstanceErrors = TraversalData.InstanceErrors;
     InstanceErrors.SetNum(NexusLoadedAsset->Header.n_nodes);
-    
     // Load roots
     for (int i = 0; i < NexusLoadedAsset->RootsCount; i ++)
     {
         AddNodeToTraversal(TraversalData, i);
     }
 
-    const float CurrentProxyError = Proxy->GetCurrentError();
+    const float CurrentProxyError = CurrentError;
     int RequestedCount = 0;
     CurrentlyBlockedNodes = 0;
     while(VisitingNodes.Num() > 0 && CurrentlyBlockedNodes < MaxBlockedNodes)
@@ -242,12 +240,18 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
         else
         {
             SelectedNodes.Add(Id);
+            
+            if (bShowDebugStuff)
+            {
+                auto& Sphere =  NexusLoadedAsset->Nodes[Id].NexusNode.sphere;
+                auto SphereCenter = VcgPoint3FToVector(Sphere.Center());
+                DrawDebugSphere(GetWorld(), SphereCenter, Sphere.Radius(), 4, FColor::Red);
+            }
         }
         AddNodeChildren(CurrentElement, TraversalData, IsBlocked);
     }
 
     UpdateRemainingErrors(InstanceErrors);
-    
     return TraversalData;
 }
 
@@ -261,7 +265,7 @@ bool UUnrealNexusComponent::CanNodeBeExpanded(Node* Node, const int NodeID, cons
 
 void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, const bool ShouldMarkBlocked)
 {
-    auto& NextNode = NexusLoadedAsset->Nodes[CurrentElement.Id + 1];
+    auto& NextNode = NexusLoadedAsset->Nodes[CurrentElement.Id];
     for (auto& CurrentPatch : NextNode.NodePatches)
     {
         const int PatchNodeId = CurrentPatch.node;

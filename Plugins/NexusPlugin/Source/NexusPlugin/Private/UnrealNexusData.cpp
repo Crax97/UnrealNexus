@@ -46,6 +46,10 @@ UUnrealNexusData::~UUnrealNexusData()
 {
 }
 
+void UUnrealNexusData::UnloadNode(const int NodeId)
+{
+}
+
 vcg::Sphere3f& UUnrealNexusData::BoundingSphere()
 {
     return Header.sphere;

@@ -254,13 +254,11 @@ FNexusNodeRenderData::~FNexusNodeRenderData()
 }
 
 
-FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending,
-const int InMaxCacheSize)
+FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending)
     : FPrimitiveSceneProxy(static_cast<UPrimitiveComponent*>(TheComponent)),
         ComponentData(TheComponent->NexusLoadedAsset),
         Component(TheComponent),
-        MaxPending(InMaxPending),
-        MaxCacheSize(InMaxCacheSize)
+        MaxPending(InMaxPending)
 {
     if (TheComponent->IsNodeLoaded(0))
     {
@@ -281,7 +279,7 @@ void FUnrealNexusProxy::AddCandidate(UINT32 CandidateID, float FirstNodeError)
 
 void FUnrealNexusProxy::FreeCache(Node* BestNode)
 {
-    while (this->CurrentCacheSize > this->MaxCacheSize)
+    while (Component->CurrentCacheSize > Component->DrawBudget)
     {
         Node* Worst = nullptr;
         UINT32 WorstID = 0;
@@ -364,15 +362,15 @@ void FUnrealNexusProxy::BeginFrame(float DeltaSeconds)
         const float Ratio = MinFPS / FPS;
         if (Ratio > 1.1f)
         {
-            CurrentError *= 1.05;
+            Component->CurrentError *= 1.05;
         } else if (Ratio < 0.9f)
         {
-            CurrentError *= 0.95;
+            Component->CurrentError *= 0.95;
         }
-        CurrentError = FMath::Max(TargetError, FMath::Min(MaxError, CurrentError));
+        Component->CurrentError = FMath::Max(Component->TargetError, FMath::Min(Component->MaxError, Component->CurrentError));
     }
     CandidateNodes.Empty();
-    CurrentError = FMath::Max(TargetError, FMath::Min(MaxError, CurrentError));
+    Component->CurrentError = FMath::Max(Component->TargetError, FMath::Min(Component->MaxError, Component->CurrentError));
 }
 
 void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
@@ -435,12 +433,12 @@ void FUnrealNexusProxy::LoadGPUData(const uint32 N)
     NodeData& TheData = TheNodeData->NexusNodeData;
     check(TheNodeData->NexusNodeData.memory);
 
-    this->PendingCount ++;
-    this->CurrentCacheSize += TheNode.getSize();
     
     ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N](FRHICommandListImmediate& Commands)
     {
         FNexusNodeRenderData* Data = new FNexusNodeRenderData(this, TheData, TheNode);
+        this->PendingCount ++;
+        Component->CurrentCacheSize += TheNode.getSize();
         Data->NumPrimitives = TheNode.nface;
         LoadedMeshData.Add(N, Data);
         this->PendingCount --;
@@ -450,10 +448,10 @@ void FUnrealNexusProxy::LoadGPUData(const uint32 N)
 void FUnrealNexusProxy::DropGPUData(uint32 N)
 {
     check(LoadedMeshData.Contains(N));
-    Node& TheNode = ComponentData->Nodes[N].NexusNode;
-    this->CurrentCacheSize -= TheNode.getSize();
     ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N](FRHICommandListImmediate& Commands)
     {
+        Node& TheNode = ComponentData->Nodes[N].NexusNode;
+        Component->CurrentCacheSize -= TheNode.getSize();
         LoadedMeshData.Remove(N);
     });
 }

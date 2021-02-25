@@ -33,6 +33,7 @@ struct FCameraInfo
     FConvexVolume ViewFrustum;
     float CurrentResolution;
     bool IsUsingSameResolutionAsBefore;
+    FMatrix WorldToModelMatrix;
 };
 
 struct FTraversalElement
@@ -75,6 +76,7 @@ private:
     // while being consistent with the tree
     const float Outer_Node_Factor = 100.0f;
     TArray<float> CalculatedErrors;
+    int CurrentCacheSize;
 
 
     float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
@@ -128,6 +130,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0", ClampMax="30"))
     float TargetError = 2.0f;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0", ClampMax="30"))
+    float MaxError;
+    
     UPROPERTY(EditAnywhere)
     bool bShowDebugStuff = false;
 

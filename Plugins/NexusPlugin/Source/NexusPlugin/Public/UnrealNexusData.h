@@ -36,6 +36,7 @@ class UUnrealNexusData final : public UObject
 public:
     UUnrealNexusData();
     virtual ~UUnrealNexusData();
+    void UnloadNode(const int NodeId);
 
     Header Header;
 
