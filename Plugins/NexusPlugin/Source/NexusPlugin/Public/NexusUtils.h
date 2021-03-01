@@ -99,4 +99,5 @@ namespace LoadUtils
     void LoadNodeData(Header& Header, int VertCount, int FacesCount, NodeData& TheNodeData, const UINT64 DataSizeOnDisk);
 }
 
+FVector VcgPoint3FToVector(const vcg::Point3f& Point3);
 FStreamableManager& GetStreamableManager();

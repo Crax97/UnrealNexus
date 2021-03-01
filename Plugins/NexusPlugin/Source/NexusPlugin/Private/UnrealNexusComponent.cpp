@@ -125,7 +125,7 @@ void UUnrealNexusComponent::Update(float DeltaSeconds)
     UpdateCameraView();
     Proxy->BeginFrame(DeltaSeconds);
     const FTraversalData TraversalData = DoTraversal();
-    Proxy->Update(TraversalData);
+    Proxy->Update(TraversalData, CameraInfo);
 }
 
 void UUnrealNexusComponent::UpdateCameraView()
@@ -196,10 +196,6 @@ void UUnrealNexusComponent::UpdateCameraView()
     CameraInfo.CurrentResolution = ResolutionThisFrame;
 }
 
-FVector UUnrealNexusComponent::VcgPoint3FToVector(const vcg::Point3f& Point3)
-{
-    return FVector(Point3.X(), Point3.Z(), Point3.Y());
-}
 
 bool UUnrealNexusComponent::IsNodeLoaded(const UINT32 NodeID) const
 {

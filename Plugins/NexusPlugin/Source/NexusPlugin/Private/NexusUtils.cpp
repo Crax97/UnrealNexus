@@ -156,6 +156,11 @@ void LoadUtils::LoadNodeData(Header& Header, int VertCount, int FacesCount, Node
     
 }
 
+FVector VcgPoint3FToVector(const vcg::Point3f& Point3)
+{
+	return FVector(Point3.X(), Point3.Z(), Point3.Y());
+}
+
 FStreamableManager& GetStreamableManager()
 {
     static FStreamableManager Manager;

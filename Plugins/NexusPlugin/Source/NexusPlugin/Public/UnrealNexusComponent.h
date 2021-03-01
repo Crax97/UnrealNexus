@@ -84,7 +84,6 @@ private:
     void UpdateRemainingErrors(TArray<float>& InstanceErrors);
     void UpdateCameraView();
     
-    static FVector VcgPoint3FToVector(const vcg::Point3f& Point3);
 protected:
     class FUnrealNexusProxy* Proxy = nullptr;
     TMap<UINT32, ENodeStatus> NodeStatuses;
