@@ -98,7 +98,7 @@ protected:
     // Gets the calculated error for the node
     float GetErrorForNode(UINT32 NodeID) const;
     
-    bool CanNodeBeExpanded(Node* Node, int NodeID, float NodeError, float CurrentCalculatedError) const;
+    bool CanNodeBeExpanded(Node* Node, int NodeID, float NodeError, float CurrentProxyError) const;
     void AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId);
     void AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked);
     
@@ -147,5 +147,6 @@ public:
     virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
     bool IsNodeLoaded(UINT32 NodeID) const;
     void SetNodeStatus(UINT32 NodeID, ENodeStatus NewStatus);
+    void ClearErrors();
     FTraversalData DoTraversal();
 };

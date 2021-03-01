@@ -8,6 +8,8 @@
 #include "Engine/LocalPlayer.h"
 #include "DrawDebugHelpers.h"
 
+constexpr bool GBCheckInvariants = true;
+
 using namespace nx;
 
 // One unit in Unreal is 100cms
@@ -63,14 +65,11 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
 
     const float SphereRadius = UseTight ? SelectedNode->tight_radius : NodeBoundingSphere.Radius();
     const FVector BoundingSphereCenter = VcgPoint3FToVector(NodeBoundingSphere.Center());
-    const FVector ViewpointToBoundingSphere = FVector( Viewpoint.X - BoundingSphereCenter.X,
-                                                    Viewpoint.Y - BoundingSphereCenter.Y,
-                                                    Viewpoint.Z - BoundingSphereCenter.Z);
+    const FVector ViewpointToBoundingSphere = Viewpoint - BoundingSphereCenter;
     const float ViewpointDistanceToBoundingSphere = FMath::Max(ViewpointToBoundingSphere.Size() - SphereRadius, 0.1f);
     float CalculatedError = SelectedNode->error / (CameraInfo.CurrentResolution * ViewpointDistanceToBoundingSphere);
     
-    const float BoundingSphereDistanceFromViewFrustum = CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SelectedNode->tight_radius);
-    
+    const float BoundingSphereDistanceFromViewFrustum =  CalculateDistanceFromSphereToViewFrustum(NodeBoundingSphere, SphereRadius);
     if (BoundingSphereDistanceFromViewFrustum < -SphereRadius)
     {
         CalculatedError /= Outer_Node_Factor + 1.0f;
@@ -78,6 +77,7 @@ float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bo
     {
         CalculatedError /= 1.0f - (BoundingSphereDistanceFromViewFrustum / SphereRadius) * Outer_Node_Factor;
     }
+
     return CalculatedError * GUnrealScaleConversion;
 }
 
@@ -90,10 +90,14 @@ float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg:
     for (UINT32 i = 0; i < 5; i ++)
     {
         const FPlane CurrentPlane = ViewPlanes[i];
-        const float DistanceFromPlane = FVector::Distance(SphereCenter, CurrentPlane);
-        if (DistanceFromPlane < MinDistance)
+        // ? const float DistanceFromPlane = FVector::Distance(SphereCenter, CurrentPlane);
+        const float DStrano =   SphereCenter.X * CurrentPlane.X +
+                                SphereCenter.Y * CurrentPlane.Y +
+                                SphereCenter.Z * CurrentPlane.Z +
+                                CurrentPlane.W + SphereTightRadius;
+        if (DStrano < MinDistance)
         {
-            MinDistance = DistanceFromPlane;
+            MinDistance = DStrano;
         }
     }
     return MinDistance;
@@ -157,13 +161,18 @@ void UUnrealNexusComponent::UpdateCameraView()
     ScreenMiddle = CameraInfo.WorldToModelMatrix.TransformPosition(ScreenMiddle);
     ScreenRight = CameraInfo.WorldToModelMatrix.TransformPosition(ScreenRight);
 
+    const auto TransposedInversedWorldToModel = CameraInfo.WorldToModelMatrix.Inverse().GetTransposed();
     
     // Transforming everything into model space
     for (UINT32 i = 0; i < 5; i ++)
     {
         FPlane& Current = CameraInfo.ViewFrustum.Planes[i];
-        Current = CameraInfo.WorldToModelMatrix.TransformPosition(Current.Flip());
+        auto PlaneToFVec4 = FVector4(-Current.X, -Current.Y, -Current.Z, -Current.W);
+        Current = TransposedInversedWorldToModel.TransformFVector4(PlaneToFVec4);
     }
+
+    // Draw frustum
+    // After extract, check non-selected i -> non-selected childs(i)
     
     const float SideLengthWorldSpace = (ScreenRight - ScreenLeft).Size();
    
@@ -177,6 +186,11 @@ void UUnrealNexusComponent::UpdateCameraView()
         DrawDebugPoint(GetWorld(), ScreenLeft, 20.0f, FColor::Green);
         DrawDebugPoint(GetWorld(), ScreenMiddle, 20.0f, FColor::White);
         DrawDebugPoint(GetWorld(), ScreenRight, 20.0f, FColor::Red);
+        for (const auto& Plane : CameraInfo.ViewFrustum.Planes)
+        {
+            // DrawDebugPoint(GetWorld(), Plane, 10.0f, FColor::Emerald);
+            DrawDebugSolidPlane(GetWorld(), Plane, CameraInfo.ViewpointLocation, 10.0f, FColor::Emerald);
+        }
     }
     CameraInfo.IsUsingSameResolutionAsBefore = CameraInfo.CurrentResolution == ResolutionThisFrame;
     CameraInfo.CurrentResolution = ResolutionThisFrame;
@@ -203,6 +217,15 @@ void UUnrealNexusComponent::SetNodeStatus(const UINT32 NodeID, const ENodeStatus
     }
 }
 
+void UUnrealNexusComponent::ClearErrors()
+{
+    for (int i = 0; i < CalculatedErrors.Num(); i ++)
+    {
+        CalculatedErrors[i] = 0.0f;
+    }
+}
+
+
 FTraversalData UUnrealNexusComponent::DoTraversal()
 {
     checkf(Proxy, TEXT("Tried to traverse the tree without a proxy (cache)"));
@@ -211,6 +234,9 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
     TSet<UINT32>& BlockedNodes = TraversalData.BlockedNodes, &SelectedNodes = TraversalData.SelectedNodes;
     TArray<float>& InstanceErrors = TraversalData.InstanceErrors;
     InstanceErrors.SetNum(NexusLoadedAsset->Header.n_nodes);
+
+    ClearErrors();
+    
     // Load roots
     for (int i = 0; i < NexusLoadedAsset->RootsCount; i ++)
     {
@@ -223,8 +249,18 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
     while(VisitingNodes.Num() > 0 && CurrentlyBlockedNodes < MaxBlockedNodes)
     {
         
-        FTraversalElement CurrentElement = VisitingNodes.Pop();
+        FTraversalElement CurrentElement;
+        VisitingNodes.HeapPop(CurrentElement, FNodeComparator{ });
+
+        for (auto& Patch : NexusLoadedAsset->Nodes[CurrentElement.Id].NodePatches)
+        {
+            const float PatchNodeError = GetErrorForNode(Patch.node);
+            checkf(CurrentElement.CalculatedError > PatchNodeError, TEXT("Child error is greater"));
+            checkf(!SelectedNodes.Contains(Patch.node), TEXT("Invariant broken: Patch node is selected"));
+        }
+        
         const float NodeError = CurrentElement.CalculatedError;
+
         const int Id = CurrentElement.Id;
         if(!IsNodeLoaded(Id) && CurrentlyBlockedNodes < MaxBlockedNodes)
         {
@@ -245,17 +281,35 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
             {
                 auto& Sphere =  NexusLoadedAsset->Nodes[Id].NexusNode.sphere;
                 auto SphereCenter = VcgPoint3FToVector(Sphere.Center());
-                DrawDebugSphere(GetWorld(), SphereCenter, Sphere.Radius(), 4, FColor::Red);
+                DrawDebugSphere(GetWorld(), SphereCenter, Sphere.Radius() / 10.0f, 4, FColor::Red);
             }
         }
         AddNodeChildren(CurrentElement, TraversalData, IsBlocked);
     }
 
+    if constexpr (GBCheckInvariants)
+    {
+        TSet<UINT32> AllNodes;
+        for (int i = 0; i < NexusLoadedAsset->Nodes.Num(); i ++)
+        {
+            AllNodes.Add(i);
+        }
+        TSet<UINT32> NotSelected = AllNodes.Difference(SelectedNodes);
+        for (auto& NodeID : NotSelected)
+        {
+            for(auto& Patch : NexusLoadedAsset->Nodes[NodeID].NodePatches)
+            {
+                // checkf(NotSelected.Contains(Patch.node), TEXT("NotSelected -> forall child : childs(NotSelected) !IsSelected(child): Broken Invariant"));
+                // checkf(NexusLoadedAsset->Nodes[NodeID].NexusNode.error > NexusLoadedAsset->Nodes[Patch.node].NexusNode.error, TEXT("Node.err < Patch.node.err"));
+            }
+        }
+    }
+    
     UpdateRemainingErrors(InstanceErrors);
     return TraversalData;
 }
 
-bool UUnrealNexusComponent::CanNodeBeExpanded(Node* Node, const int NodeID, const float NodeError, const float CurrentCalculatedError) const
+bool UUnrealNexusComponent::CanNodeBeExpanded(Node* Node, const int NodeID, const float NodeError, const float CurrentProxyError) const
 {
     return NodeError > TargetError &&
         CurrentDrawBudget <= DrawBudget &&
@@ -265,8 +319,8 @@ bool UUnrealNexusComponent::CanNodeBeExpanded(Node* Node, const int NodeID, cons
 
 void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, const bool ShouldMarkBlocked)
 {
-    auto& NextNode = NexusLoadedAsset->Nodes[CurrentElement.Id];
-    for (auto& CurrentPatch : NextNode.NodePatches)
+    auto& CurrentNode = NexusLoadedAsset->Nodes[CurrentElement.Id];
+    for (auto& CurrentPatch : CurrentNode.NodePatches)
     {
         const int PatchNodeId = CurrentPatch.node;
         if (PatchNodeId == NexusLoadedAsset->Header.n_nodes - 1)
