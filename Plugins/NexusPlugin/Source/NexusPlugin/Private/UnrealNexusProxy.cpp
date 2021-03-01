@@ -254,6 +254,11 @@ FNexusNodeRenderData::~FNexusNodeRenderData()
 }
 
 
+bool FUnrealNexusProxy::IsInsideFrustum(const FVector& SphereCenter, const float SphereRadius) const
+{
+    return LastCameraInfo.ViewFrustum.IntersectSphere(SphereCenter, SphereRadius);
+}
+
 FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending)
     : FPrimitiveSceneProxy(static_cast<UPrimitiveComponent*>(TheComponent)),
         ComponentData(TheComponent->NexusLoadedAsset),
@@ -373,9 +378,10 @@ void FUnrealNexusProxy::BeginFrame(float DeltaSeconds)
     Component->CurrentError = FMath::Max(Component->TargetError, FMath::Min(Component->MaxError, Component->CurrentError));
 }
 
-void FUnrealNexusProxy::Update(FTraversalData InTraversalData)
+void FUnrealNexusProxy::Update(const FTraversalData InLastTraversalData, const FCameraInfo InLastCameraInfo)
 {
-    LastTraversalData = InTraversalData;
+    LastTraversalData = InLastTraversalData;
+    LastCameraInfo = InLastCameraInfo;
     if (this->PendingCount >= this->MaxPending)
         return;
     
@@ -486,6 +492,11 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
             }
         }
         if(!IsVisible) continue;
+
+        if (!IsInsideFrustum( VcgPoint3FToVector(CurrentNode.NexusNode.sphere.Center()), CurrentNode.NexusNode.tight_radius))
+        {
+            continue;
+        }
 
         int Offset = 0;
         int EndIndex = 0;
