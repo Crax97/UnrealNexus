@@ -67,6 +67,7 @@ private:
     int CurrentlyBlockedNodes = 0;
     int CurrentDrawBudget = 0;
     float CurrentError = 0.0f;
+    bool bWasInit = false;
 
     // TODO: Load first node and calculate Radius based on that
     float ComponentBoundsRadius = 1000.0f;
@@ -78,18 +79,16 @@ private:
     TArray<float> CalculatedErrors;
     int CurrentCacheSize;
 
-
     float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
     float CalculateErrorForNode(const UINT32 NodeID, bool UseTight) const;
     void UpdateRemainingErrors(TArray<float>& InstanceErrors);
     void UpdateCameraView();
-    
+    void InitializeComponent();
+    virtual void OnRegister() override;
+    virtual void BeginPlay() override;
 protected:
     class FUnrealNexusProxy* Proxy = nullptr;
     TMap<UINT32, ENodeStatus> NodeStatuses;
-
-    // Updates the status of the component
-    void Update(float DeltaTime);
 
     // Updates the calculated error for the node
     void SetErrorForNode(UINT32 NodeID, float Error);
@@ -101,7 +100,6 @@ protected:
     void AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId);
     void AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked);
     
-    virtual void BeginPlay() override;
     virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 public:
     explicit UUnrealNexusComponent(const FObjectInitializer& Initializer);

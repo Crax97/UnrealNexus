@@ -8,7 +8,7 @@
 #include "Engine/LocalPlayer.h"
 #include "DrawDebugHelpers.h"
 
-constexpr bool GBCheckInvariants = true;
+constexpr bool GBCheckInvariants = false;
 
 using namespace nx;
 
@@ -90,14 +90,10 @@ float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg:
     for (UINT32 i = 0; i < 5; i ++)
     {
         const FPlane CurrentPlane = ViewPlanes[i];
-        // ? const float DistanceFromPlane = FVector::Distance(SphereCenter, CurrentPlane);
-        const float DStrano =   SphereCenter.X * CurrentPlane.X +
-                                SphereCenter.Y * CurrentPlane.Y +
-                                SphereCenter.Z * CurrentPlane.Z +
-                                CurrentPlane.W + SphereTightRadius;
-        if (DStrano < MinDistance)
+        const float DistanceFromPlane = FVector::Distance(SphereCenter, CurrentPlane);
+        if (DistanceFromPlane < MinDistance)
         {
-            MinDistance = DStrano;
+            MinDistance = DistanceFromPlane;
         }
     }
     return MinDistance;
@@ -115,17 +111,6 @@ FPrimitiveSceneProxy* UUnrealNexusComponent::CreateSceneProxy()
 {
     Proxy = new FUnrealNexusProxy(this);
     return static_cast<FPrimitiveSceneProxy*>(Proxy);
-}
-
-void UUnrealNexusComponent::Update(float DeltaSeconds)
-{
-    Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), NexusLoadedAsset->BoundingSphere().Radius()));
-    UpdateBounds();
-    if ( !Proxy) return;
-    UpdateCameraView();
-    Proxy->BeginFrame(DeltaSeconds);
-    const FTraversalData TraversalData = DoTraversal();
-    Proxy->Update(TraversalData, CameraInfo);
 }
 
 void UUnrealNexusComponent::UpdateCameraView()
@@ -186,16 +171,40 @@ void UUnrealNexusComponent::UpdateCameraView()
         DrawDebugPoint(GetWorld(), ScreenLeft, 20.0f, FColor::Green);
         DrawDebugPoint(GetWorld(), ScreenMiddle, 20.0f, FColor::White);
         DrawDebugPoint(GetWorld(), ScreenRight, 20.0f, FColor::Red);
-        for (const auto& Plane : CameraInfo.ViewFrustum.Planes)
-        {
-            // DrawDebugPoint(GetWorld(), Plane, 10.0f, FColor::Emerald);
-            DrawDebugSolidPlane(GetWorld(), Plane, CameraInfo.ViewpointLocation, 10.0f, FColor::Emerald);
-        }
     }
     CameraInfo.IsUsingSameResolutionAsBefore = CameraInfo.CurrentResolution == ResolutionThisFrame;
     CameraInfo.CurrentResolution = ResolutionThisFrame;
 }
 
+void UUnrealNexusComponent::InitializeComponent()
+{
+    CalculatedErrors.Reserve(NexusLoadedAsset->Nodes.Num());
+    CalculatedErrors.SetNum(NexusLoadedAsset->Nodes.Num());
+    NodeStatuses.Reserve(NexusLoadedAsset->Nodes.Num());
+    ComponentBoundsRadius = NexusLoadedAsset->BoundingSphere().Radius(); 
+    Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), ComponentBoundsRadius * 10.0f));
+    
+    Proxy->GetReady();
+}
+
+void UUnrealNexusComponent::OnRegister()
+{
+    Super::OnRegister();
+    if(!NexusLoadedAsset || !Proxy) return;
+    
+    InitializeComponent();
+    bWasInit = true;
+}
+
+void UUnrealNexusComponent::BeginPlay()
+{
+    Super::BeginPlay();
+    if (bWasInit) return;
+    if(!NexusLoadedAsset || !Proxy) return;
+    InitializeComponent();
+    bWasInit = true;
+    
+}
 
 bool UUnrealNexusComponent::IsNodeLoaded(const UINT32 NodeID) const
 {
@@ -247,13 +256,6 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
         
         FTraversalElement CurrentElement;
         VisitingNodes.HeapPop(CurrentElement, FNodeComparator{ });
-
-        for (auto& Patch : NexusLoadedAsset->Nodes[CurrentElement.Id].NodePatches)
-        {
-            const float PatchNodeError = GetErrorForNode(Patch.node);
-            checkf(CurrentElement.CalculatedError > PatchNodeError, TEXT("Child error is greater"));
-            checkf(!SelectedNodes.Contains(Patch.node), TEXT("Invariant broken: Patch node is selected"));
-        }
         
         const float NodeError = CurrentElement.CalculatedError;
 
@@ -272,35 +274,9 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
         else
         {
             SelectedNodes.Add(Id);
-            
-            if (bShowDebugStuff)
-            {
-                auto& Sphere =  NexusLoadedAsset->Nodes[Id].NexusNode.sphere;
-                auto SphereCenter = VcgPoint3FToVector(Sphere.Center());
-                DrawDebugSphere(GetWorld(), SphereCenter, Sphere.Radius() / 10.0f, 4, FColor::Red);
-            }
         }
         AddNodeChildren(CurrentElement, TraversalData, IsBlocked);
     }
-
-    if constexpr (GBCheckInvariants)
-    {
-        TSet<UINT32> AllNodes;
-        for (int i = 0; i < NexusLoadedAsset->Nodes.Num(); i ++)
-        {
-            AllNodes.Add(i);
-        }
-        TSet<UINT32> NotSelected = AllNodes.Difference(SelectedNodes);
-        for (auto& NodeID : NotSelected)
-        {
-            for(auto& Patch : NexusLoadedAsset->Nodes[NodeID].NodePatches)
-            {
-                // checkf(NotSelected.Contains(Patch.node), TEXT("NotSelected -> forall child : childs(NotSelected) !IsSelected(child): Broken Invariant"));
-                // checkf(NexusLoadedAsset->Nodes[NodeID].NexusNode.error > NexusLoadedAsset->Nodes[Patch.node].NexusNode.error, TEXT("Node.err < Patch.node.err"));
-            }
-        }
-    }
-    
     UpdateRemainingErrors(InstanceErrors);
     return TraversalData;
 }
@@ -364,30 +340,17 @@ void UUnrealNexusComponent::UpdateRemainingErrors(TArray<float>& InstanceErrors)
     }
 }
 
-void UUnrealNexusComponent::BeginPlay()
-{
-    Super::BeginPlay();
-    if (NexusLoadedAsset)
-    {
-        CalculatedErrors.SetNum(NexusLoadedAsset->Nodes.Num());
-        NodeStatuses.Reserve(NexusLoadedAsset->Nodes.Num());   
-    }
-    
-    if (Proxy)
-        Proxy->GetReady();
-}
-
 FBoxSphereBounds UUnrealNexusComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-    const FBoxSphereBounds ComponentBounds = FBoxSphereBounds(FSphere(FVector::ZeroVector, ComponentBoundsRadius));
+    const FBoxSphereBounds ComponentBounds = FBoxSphereBounds(FSphere(FVector::ZeroVector, ComponentBoundsRadius * 10.0f));
     return ComponentBounds.TransformBy(LocalToWorld);
 }
 
 void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-                                          FActorComponentTickFunction* ThisTickFunction)
+        FActorComponentTickFunction* ThisTickFunction)
 {
-    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-    if(!NexusLoadedAsset) return;
-    Update(DeltaTime);
-
+    if (!Proxy) return;
+    UpdateCameraView();
+    const FTraversalData TraversalData = DoTraversal();
+    Proxy->Update(TraversalData, CameraInfo);
 }

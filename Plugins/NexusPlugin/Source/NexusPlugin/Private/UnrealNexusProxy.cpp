@@ -36,23 +36,15 @@ FNexusNodeRenderData::FNexusNodeRenderData(const FUnrealNexusProxy* Proxy, NodeD
 void FNexusNodeRenderData::CreateIndexBuffer(Signature& Sig, Node& Node,  nx::NodeData& Data)
 {
     check(Sig.face.hasIndex())
-    TArray<uint16> Indices;
-    Indices.SetNum(Node.nface * 3);
     uint16* FaceIndices = Data.faces(Sig, Node.nvert);
-    for (int i = 0; i < Node.nface; i++)
-    {
-        Indices[i * 3 + 0] = FaceIndices[i * 3 + 0];
-        Indices[i * 3 + 1] = FaceIndices[i * 3 + 1];
-        Indices[i * 3 + 2] = FaceIndices[i * 3 + 2];
-    }
-
+    const SIZE_T IndicesCount = Node.nface * 3;
+    
     FRHIResourceCreateInfo Info;
-    IndexBuffer.IndexBufferRHI = RHICreateIndexBuffer(sizeof(uint16), Indices.Num() * sizeof(uint16), BUF_Static, Info);
-    void* Pointer = RHILockIndexBuffer(IndexBuffer.IndexBufferRHI, 0, Indices.Num() * sizeof(uint16), RLM_WriteOnly);
-    FMemory::Memcpy(Pointer, Indices.GetData(), Indices.Num() * sizeof(uint16));
+    IndexBuffer.IndexBufferRHI = RHICreateIndexBuffer(sizeof(uint16), IndicesCount * sizeof(uint16) , BUF_Static, Info);
+    void* Pointer = RHILockIndexBuffer(IndexBuffer.IndexBufferRHI, 0, IndicesCount * sizeof(uint16), RLM_WriteOnly);
+    FMemory::Memcpy(Pointer, FaceIndices, IndicesCount * sizeof(uint16));
     RHIUnlockIndexBuffer(IndexBuffer.IndexBufferRHI);
     BeginInitResource(&IndexBuffer);
-    
 }
 
 void FNexusNodeRenderData::CreatePositionBuffer(nx::Node& Node, nx::NodeData& Data)
@@ -81,13 +73,11 @@ void FNexusNodeRenderData::InitTexBuffer(const FUnrealNexusProxy* Proxy, Signatu
             vcg::Point2f Coord = Points[i];
             TexCoords[i] = { Coord.X(), Coord.Y() };
         }
-        // Same number as verts?
     }
     else {
         FMemory::Memset(TexCoords.GetData(), 0, TexCoords.Num() * sizeof(FVector2D));
     }
     TexCoordsBuffer.VertexBufferRHI = CreateBufferAndFillWithData(TexCoords.GetData(), TexCoords.Num() * sizeof(FVector2D));
-    // TODO Check if using half precision
     TexCoordsBuffer.ShaderResourceViewRHI = RHICreateShaderResourceView(FShaderResourceViewInitializer(TexCoordsBuffer.VertexBufferRHI, PF_G32R32F));
     BeginInitResource(&TexCoordsBuffer);
 }
@@ -256,7 +246,7 @@ FNexusNodeRenderData::~FNexusNodeRenderData()
 
 bool FUnrealNexusProxy::IsInsideFrustum(const FVector& SphereCenter, const float SphereRadius) const
 {
-    return LastCameraInfo.ViewFrustum.IntersectSphere(SphereCenter, SphereRadius);
+    return LastCameraInfo.ViewFrustum.IntersectSphere(SphereCenter, SphereRadius / 100.0f);
 }
 
 FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending)

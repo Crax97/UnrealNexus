@@ -36,21 +36,23 @@ class UUnrealNexusData final : public UObject
 public:
     UUnrealNexusData();
     virtual ~UUnrealNexusData();
-    void UnloadNode(const int NodeId);
 
     Header Header;
 
     UPROPERTY()
     TArray<FUnrealNexusNode> Nodes;
-    TMap<UINT32, TSharedPtr<FStreamableHandle>> NodeHandles;
     
     UPROPERTY()
     int RootsCount;
+    
+    TMap<UINT32, TSharedPtr<FStreamableHandle>> NodeHandles;
 
     vcg::Sphere3f &BoundingSphere();
     bool Intersects(vcg::Ray3f &Ray, float &Distance);
     uint32_t Size(uint32_t Node);
     void LoadNodeAsync(const UINT32 NodeID, FStreamableDelegate Callback);
+    void UnloadNode(const int NodeId);
+    
     class UUnrealNexusNodeData* GetNode(UINT32 NodeId);
 
     // Unreal engine specific stuff
