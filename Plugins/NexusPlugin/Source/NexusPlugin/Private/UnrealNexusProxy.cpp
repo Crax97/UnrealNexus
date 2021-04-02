@@ -151,8 +151,8 @@ void FNexusNodeRenderData::CalculateTangents(TArray<FPackedNormal>& OutTangents,
     for (uint32 Index = 0; Index < Node.nvert; Index ++)
     {
         FVector CalculatedTangentPerVertex = TSums[Index] / Counts[Index];
-        OutTangents[Index * 2 + 0] = FPackedNormal(CalculatedTangentPerVertex);
-        OutTangents[Index * 2 + 1] = FPackedNormal(Point3SToVector(Normals[Index]));
+        OutTangents[Index * 2 + 0] = FPackedNormal(CalculatedTangentPerVertex.GetSafeNormal());
+        OutTangents[Index * 2 + 1] = FPackedNormal(Point3SToVector(Normals[Index]).GetSafeNormal());
     }
 }
 
