@@ -443,7 +443,7 @@ void FUnrealNexusProxy::LoadGPUData(const uint32 N)
 
 void FUnrealNexusProxy::DropGPUData(uint32 N)
 {
-    check(LoadedMeshData.Contains(N));
+    if (!LoadedMeshData.Contains(N)) return;
     ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N](FRHICommandListImmediate& Commands)
     {
         Node& TheNode = ComponentData->Nodes[N].NexusNode;
