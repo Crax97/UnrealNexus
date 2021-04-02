@@ -152,9 +152,10 @@ void UUnrealNexusComponent::UpdateCameraView()
     for (UINT32 i = 0; i < 5; i ++)
     {
         FPlane& Current = CameraInfo.ViewFrustum.Planes[i];
-        auto PlaneToFVec4 = FVector4(-Current.X, -Current.Y, -Current.Z, -Current.W);
-        Current = TransposedInversedWorldToModel.TransformFVector4(PlaneToFVec4);
+        Current = TransposedInversedWorldToModel.TransformFVector4(Current);
     }
+
+    CameraInfo.ViewFrustum.Init();
 
     // Draw frustum
     // After extract, check non-selected i -> non-selected childs(i)
