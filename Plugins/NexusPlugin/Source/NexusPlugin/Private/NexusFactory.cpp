@@ -48,7 +48,7 @@ UObject* UNexusFactory::FactoryCreateBinary(UClass* Class, UObject* InParent, co
         NexusImportedFile = nullptr;
     }
 
-    InitData(NexusImportedFile, BufferPtr, Buffer);
+    InitData(NexusImportedFile, NexusDataPackage, BufferPtr, Buffer);
     
     GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPostImport(this, NexusImportedFile);
     return NexusImportedFile;
@@ -94,7 +94,7 @@ bool UNexusFactory::ReadDataIntoNexusFile(UUnrealNexusData* UnrealNexusData, uin
     return ParseHeader(UnrealNexusData, Buffer, BufferEnd);
 }
 
-void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer, const uint8* FileBegin)
+void UNexusFactory::InitData(UUnrealNexusData* Data,  UPackage* DataPackage, uint8*& Buffer, const uint8* FileBegin)
 {
     using namespace Utils;
     using namespace DataUtils;
@@ -114,11 +114,10 @@ void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer, const uint8
         
         // Create a Node .uasset and register it
         auto NodePathString = FString::Printf(TEXT("%s_Node%d"), *PackagePath, i);
-        UPackage* NodePackage = CreatePackage(nullptr, *NodePathString);
         auto& UCurrentNode = Data->Nodes[i];
         auto& UNextNode = Data->Nodes[i + 1];
         auto NodeName = FPaths::GetBaseFilename(NodePathString);
-        UUnrealNexusNodeData* UNodeData = NodeFactory->CreateNodeAssetFile(NodePackage, NodeName);
+        UUnrealNexusNodeData* UNodeData = NodeFactory->CreateNodeAssetFile(DataPackage, NodeName);
         UNodeData->NodeSize = UNextNode.NexusNode.getBeginOffset() - UCurrentNode.NexusNode.getBeginOffset();
         UNodeData->NexusNodeData.memory = new char[UNodeData->NodeSize];
 
