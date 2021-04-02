@@ -424,6 +424,7 @@ FUnrealNexusProxy::~FUnrealNexusProxy()
 
 void FUnrealNexusProxy::LoadGPUData(const uint32 N)
 {
+    if (LoadedMeshData.Contains(N)) return;
     auto& TheNode = ComponentData->Nodes[N].NexusNode;
     auto* TheNodeData = ComponentData->GetNode(N);
     NodeData& TheData = TheNodeData->NexusNodeData;
@@ -483,7 +484,8 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
         }
         if(!IsVisible) continue;
 
-        if (!IsInsideFrustum( VcgPoint3FToVector(CurrentNode.NexusNode.sphere.Center()), CurrentNode.NexusNode.tight_radius))
+        const float ScaleFactor = 5.f;
+        if (!IsInsideFrustum( VcgPoint3FToVector(CurrentNode.NexusNode.sphere.Center()), CurrentNode.NexusNode.tight_radius * ScaleFactor))
         {
             continue;
         }
