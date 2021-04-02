@@ -246,7 +246,7 @@ FNexusNodeRenderData::~FNexusNodeRenderData()
 
 bool FUnrealNexusProxy::IsInsideFrustum(const FVector& SphereCenter, const float SphereRadius) const
 {
-    return LastCameraInfo.ViewFrustum.IntersectSphere(SphereCenter, SphereRadius / 100.0f);
+    return LastCameraInfo.ViewFrustum.IntersectSphere(SphereCenter, SphereRadius);
 }
 
 FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending)
