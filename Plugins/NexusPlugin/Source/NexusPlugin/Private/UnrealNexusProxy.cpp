@@ -244,9 +244,17 @@ FNexusNodeRenderData::~FNexusNodeRenderData()
 }
 
 
-bool FUnrealNexusProxy::IsInsideFrustum(const FVector& SphereCenter, const float SphereRadius) const
-{
-    return LastCameraInfo.ViewFrustum.IntersectSphere(SphereCenter, SphereRadius);
+bool FUnrealNexusProxy::IsNotOutsideViewFrustum(const FVector& SphereCenter, const float SphereRadius) const
+{   
+    auto& Planes = LastCameraInfo.ViewFrustum.Planes;
+    for(auto& Plane : Planes)
+    {
+        if (Plane.PlaneDot(SphereCenter) + SphereRadius < 0)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending)
@@ -485,7 +493,7 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
         if(!IsVisible) continue;
 
         const float ScaleFactor = 5.f;
-        if (!IsInsideFrustum( VcgPoint3FToVector(CurrentNode.NexusNode.sphere.Center()), CurrentNode.NexusNode.tight_radius * ScaleFactor))
+        if (!IsNotOutsideViewFrustum( VcgPoint3FToVector(CurrentNode.NexusNode.sphere.Center()), CurrentNode.NexusNode.tight_radius * ScaleFactor))
         {
             continue;
         }
