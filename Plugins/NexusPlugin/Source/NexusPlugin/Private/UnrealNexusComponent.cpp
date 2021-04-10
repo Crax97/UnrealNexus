@@ -179,6 +179,7 @@ void UUnrealNexusComponent::UpdateCameraView()
 
 void UUnrealNexusComponent::InitializeComponent()
 {
+    if(!NexusLoadedAsset) return;
     CalculatedErrors.Reserve(NexusLoadedAsset->Nodes.Num());
     CalculatedErrors.SetNum(NexusLoadedAsset->Nodes.Num());
     NodeStatuses.Reserve(NexusLoadedAsset->Nodes.Num());
