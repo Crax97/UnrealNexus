@@ -46,10 +46,6 @@ UUnrealNexusData::~UUnrealNexusData()
 {
 }
 
-void UUnrealNexusData::UnloadNode(const int NodeId)
-{
-}
-
 vcg::Sphere3f& UUnrealNexusData::BoundingSphere()
 {
     return Header.sphere;
@@ -156,6 +152,15 @@ void UUnrealNexusData::LoadNodeAsync(const UINT32 NodeID, const FStreamableDeleg
 		const auto Handle = GetStreamableManager().RequestAsyncLoad({NodePath}, Callback);
 		NodeHandles.Add(NodeID, Handle);
 	}
+}
+
+void UUnrealNexusData::UnloadNode(const int NodeID)
+{	
+	if(!NodeHandles.Contains(NodeID)) return;
+	
+	const FSoftObjectPath NodePath = Nodes[NodeID].NodeDataPath;
+	GetStreamableManager().Unload({NodePath});
+	NodeHandles.Remove(NodeID);
 }
 
 UUnrealNexusNodeData* UUnrealNexusData::GetNode(const UINT32 NodeId)

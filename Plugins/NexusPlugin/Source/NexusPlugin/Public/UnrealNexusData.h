@@ -51,7 +51,7 @@ public:
     bool Intersects(vcg::Ray3f &Ray, float &Distance);
     uint32_t Size(uint32_t Node);
     void LoadNodeAsync(const UINT32 NodeID, FStreamableDelegate Callback);
-    void UnloadNode(const int NodeId);
+    void UnloadNode(const int NodeID);
     
     class UUnrealNexusNodeData* GetNode(UINT32 NodeId);
 

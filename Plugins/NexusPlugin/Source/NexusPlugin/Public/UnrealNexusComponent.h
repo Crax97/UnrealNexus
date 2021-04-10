@@ -77,7 +77,7 @@ private:
     // while being consistent with the tree
     const float Outer_Node_Factor = 100.0f;
     TArray<float> CalculatedErrors;
-    int CurrentCacheSize;
+    UINT64 CurrentCacheSize;
 
     float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
     float CalculateErrorForNode(const UINT32 NodeID, bool UseTight) const;
@@ -107,6 +107,8 @@ public:
     
     virtual void TickComponent(float DeltaTime, ELevelTick TickType,
         FActorComponentTickFunction* ThisTickFunction) override;
+    UINT64 GetNodeSize(const uint32 NodeID) const;
+    void UnloadNode(UINT32 UnloadedNodeID);
 
     // https://docs.unrealengine.com/en-US/ProgrammingAndScripting/ProgrammingWithCPP/Assets/AsyncLoading/index.html
     // A TSoftObjectPtr is basically a TWeakObjectPtr that wraps around a FSoftObjectPath,

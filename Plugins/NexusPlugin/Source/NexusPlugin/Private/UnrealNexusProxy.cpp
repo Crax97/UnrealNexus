@@ -280,16 +280,28 @@ void FUnrealNexusProxy::AddCandidate(UINT32 CandidateID, float FirstNodeError)
     CandidateNodes.Add(FCandidateNode {CandidateID, FirstNodeError});
 }
 
-void FUnrealNexusProxy::FreeCache(Node* BestNode)
+void FUnrealNexusProxy::UnloadNode(UINT32 WorstID)
 {
-    while (Component->CurrentCacheSize > Component->DrawBudget)
+    Component->UnloadNode(WorstID);
+    DropGPUData(WorstID);
+    Component->SetNodeStatus(WorstID, ENodeStatus::Dropped);
+
+    // We should fetch this data dynamically from the component
+    if (LastTraversalData.SelectedNodes.Contains(WorstID))
+        LastTraversalData.SelectedNodes.Remove(WorstID);
+}
+
+void FUnrealNexusProxy::FreeCache(Node* BestNode, const UINT64 BestNodeID)
+{
+    while (Component->CurrentCacheSize > static_cast<UINT64>(Component->DrawBudget))
     {
         Node* Worst = nullptr;
         UINT32 WorstID = 0;
         TArray<UINT32> LoadedNodes;
         LoadedMeshData.GenerateKeyArray(LoadedNodes);
-        for (UINT32 ID = 0; ID < ComponentData->Header.n_nodes; ID ++)
+        for (auto& Pair : LoadedMeshData)
         {
+            const UINT64 ID = Pair.Key;
             Node* SelectedNode = &ComponentData->Nodes[ID].NexusNode;
             const float SelectedNodeError = Component->GetErrorForNode(ID);
             if (!Worst || SelectedNodeError < Component->GetErrorForNode(WorstID))
@@ -298,12 +310,11 @@ void FUnrealNexusProxy::FreeCache(Node* BestNode)
                 WorstID = ID;
             }
         }
-        if (!Worst || Worst->error >= BestNode->error * 0.9f)
+        if (!Worst || Component->GetErrorForNode(WorstID) >= Component->GetErrorForNode(BestNodeID) * 0.9f)
         {
             return;
         }
-        Component->SetNodeStatus(WorstID, ENodeStatus::Dropped);
-        DropGPUData(WorstID);
+        UnloadNode(WorstID);
     }
 
 }
@@ -394,7 +405,7 @@ void FUnrealNexusProxy::Update(const FTraversalData InLastTraversalData, const F
     const UINT32 BestNodeID = OptionalBestNode.GetValue().Key;
 
     // TODO: Pick a better name
-    FreeCache(BestNode);
+    FreeCache(BestNode, BestNodeID);
     
     RemoveCandidateWithId(BestNodeID);
     Component->SetNodeStatus(BestNodeID, ENodeStatus::Pending);
@@ -416,7 +427,6 @@ void FUnrealNexusProxy::Update(const FTraversalData InLastTraversalData, const F
     {
         Component->SetNodeStatus(DoneJob.NodeIndex, ENodeStatus::Loaded);
         LoadGPUData(DoneJob.NodeIndex);
-        UE_LOG(NexusInfo, Log, TEXT("Loaded Nexus node with index %d"), DoneJob.NodeIndex);
     }
 }
 
@@ -437,13 +447,13 @@ void FUnrealNexusProxy::LoadGPUData(const uint32 N)
     auto* TheNodeData = ComponentData->GetNode(N);
     NodeData& TheData = TheNodeData->NexusNodeData;
     check(TheNodeData->NexusNodeData.memory);
-
+    Component->CurrentCacheSize += Component->GetNodeSize(N);
     
     ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N](FRHICommandListImmediate& Commands)
     {
         FNexusNodeRenderData* Data = new FNexusNodeRenderData(this, TheData, TheNode);
         this->PendingCount ++;
-        Component->CurrentCacheSize += TheNode.getSize();
+        UE_LOG(NexusInfo, Log, TEXT("Increase cache %d by %d"), Component->CurrentCacheSize, Component->GetNodeSize(N));
         Data->NumPrimitives = TheNode.nface;
         LoadedMeshData.Add(N, Data);
         this->PendingCount --;
@@ -453,12 +463,9 @@ void FUnrealNexusProxy::LoadGPUData(const uint32 N)
 void FUnrealNexusProxy::DropGPUData(uint32 N)
 {
     if (!LoadedMeshData.Contains(N)) return;
-    ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N](FRHICommandListImmediate& Commands)
-    {
-        Node& TheNode = ComponentData->Nodes[N].NexusNode;
-        Component->CurrentCacheSize -= TheNode.getSize();
-        LoadedMeshData.Remove(N);
-    });
+    Component->CurrentCacheSize -= Component->GetNodeSize(N);
+    LoadedMeshData.Remove(N);
+    UE_LOG(NexusInfo, Log, TEXT("Decrease cache %d by %d"), Component->CurrentCacheSize, Component->GetNodeSize(N));
 }
 
 

@@ -356,3 +356,15 @@ void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     const FTraversalData TraversalData = DoTraversal();
     Proxy->Update(TraversalData, CameraInfo);
 }
+
+UINT64 UUnrealNexusComponent::GetNodeSize(const uint32 NodeID) const
+{
+    auto& Node = NexusLoadedAsset->Nodes[NodeID];
+    auto& NextNode = NexusLoadedAsset->Nodes[NodeID + 1];
+    return (NextNode.NexusNode.getBeginOffset() - Node.NexusNode.getBeginOffset());
+}
+
+void UUnrealNexusComponent::UnloadNode(UINT32 UnloadedNodeID)
+{
+    NexusLoadedAsset->UnloadNode(UnloadedNodeID);
+}

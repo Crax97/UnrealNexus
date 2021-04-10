@@ -68,9 +68,10 @@ protected:
     FMaterialRenderProxy* MaterialProxy;
 
     void AddCandidate(UINT32 CandidateID, float FirstNodeError);
+    void UnloadNode(UINT32 WorstID);
 
     // Removes the worst node in the cache until there's enough space to load other nodes
-    void FreeCache(Node* BestNode);
+    void FreeCache(Node* BestNode, const UINT64 BestNodeID);
 
     // Removes everything from the cache
     void Flush();
