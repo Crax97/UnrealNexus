@@ -68,6 +68,7 @@ private:
     int CurrentDrawBudget = 0;
     float CurrentError = 0.0f;
     bool bWasInit = false;
+    bool bIsTraversalEnabled = true;
 
     // TODO: Load first node and calculate Radius based on that
     float ComponentBoundsRadius = 1000.0f;
@@ -137,6 +138,13 @@ public:
 
     UPROPERTY(EditAnywhere)
     class UMaterialInterface* ModelMaterial = nullptr;
+
+    UFUNCTION(BlueprintCallable)
+    void ToggleTraversal(bool NewTraversalState);
+
+    UFUNCTION(BlueprintCallable, BlueprintPure)
+    FORCEINLINE bool IsTraversalEnabled() const { return bIsTraversalEnabled; }
+    
     /*
     UFUNCTION(BlueprintCallable)
     bool IsStreaming();

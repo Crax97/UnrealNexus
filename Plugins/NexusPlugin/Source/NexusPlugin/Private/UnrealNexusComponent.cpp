@@ -99,6 +99,11 @@ float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg:
     return MinDistance;
 }
 
+void UUnrealNexusComponent::ToggleTraversal(const bool NewTraversalState)
+{
+    bIsTraversalEnabled = NewTraversalState;
+}
+
 void UUnrealNexusComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials) const
 {
     if (ModelMaterial != nullptr)
@@ -351,7 +356,7 @@ FBoxSphereBounds UUnrealNexusComponent::CalcBounds(const FTransform& LocalToWorl
 void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,
         FActorComponentTickFunction* ThisTickFunction)
 {
-    if (!Proxy) return;
+    if (!Proxy || !bIsTraversalEnabled) return;
     UpdateCameraView();
     const FTraversalData LastTraversalData = DoTraversal();
     Proxy->Update(CameraInfo, LastTraversalData);
