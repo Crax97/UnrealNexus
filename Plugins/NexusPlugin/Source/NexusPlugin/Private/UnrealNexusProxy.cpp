@@ -382,9 +382,10 @@ void FUnrealNexusProxy::BeginFrame(float DeltaSeconds)
     Component->CurrentError = FMath::Max(Component->TargetError, FMath::Min(Component->MaxError, Component->CurrentError));
 }
 
-void FUnrealNexusProxy::Update(const FCameraInfo InLastCameraInfo)
+void FUnrealNexusProxy::Update(const FCameraInfo InLastCameraInfo, const FTraversalData InLastTraversalData)
 {
     LastCameraInfo = InLastCameraInfo;
+    LastTraversalData = InLastTraversalData;
     if (this->PendingCount >= this->MaxPending)
         return;
     
@@ -458,7 +459,12 @@ void FUnrealNexusProxy::DropGPUData(uint32 N)
 {
     if (!LoadedMeshData.Contains(N)) return;
     Component->CurrentCacheSize -= Component->GetNodeSize(N);
-    LoadedMeshData.Remove(N);
+    if (LastTraversalData.SelectedNodes.Contains(N))
+        LastTraversalData.SelectedNodes.Remove(N);
+    ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N](FRHICommandListImmediate& Commands)
+    {
+        LoadedMeshData.Remove(N);
+    });
     UE_LOG(NexusInfo, Log, TEXT("Decrease cache %d by %d"), Component->CurrentCacheSize, Component->GetNodeSize(N));
 }
 
@@ -471,9 +477,11 @@ bool FUnrealNexusProxy::CanBeOccluded() const
 void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* View, FMeshElementCollector& Collector, const FEngineShowFlags& EngineShowFlags) const
 {
     int RenderedCount = 0;
-    const TSet<UINT32>& SelectedNodes = Component->LastTraversalData.SelectedNodes;
+    const TSet<UINT32> SelectedNodes = LastTraversalData.SelectedNodes;
     for (UINT32 Id : SelectedNodes)
     {
+        if (!LoadedMeshData.Contains(Id))
+            continue; // This node was dropped
         FNexusNodeRenderData* Data = LoadedMeshData[Id];
 
         // Detecting if this node is on the edge

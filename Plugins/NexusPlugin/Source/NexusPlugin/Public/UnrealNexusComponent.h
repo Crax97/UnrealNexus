@@ -78,7 +78,6 @@ private:
     const float Outer_Node_Factor = 100.0f;
     TArray<float> CalculatedErrors;
     UINT64 CurrentCacheSize;
-    FTraversalData LastTraversalData;
 
     float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
     float CalculateErrorForNode(const UINT32 NodeID, bool UseTight) const;

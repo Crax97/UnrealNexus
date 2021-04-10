@@ -353,8 +353,8 @@ void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
     if (!Proxy) return;
     UpdateCameraView();
-    LastTraversalData = DoTraversal();
-    Proxy->Update(CameraInfo);
+    const FTraversalData LastTraversalData = DoTraversal();
+    Proxy->Update(CameraInfo, LastTraversalData);
 }
 
 UINT64 UUnrealNexusComponent::GetNodeSize(const uint32 NodeID) const
@@ -367,9 +367,5 @@ UINT64 UUnrealNexusComponent::GetNodeSize(const uint32 NodeID) const
 void UUnrealNexusComponent::UnloadNode(UINT32 UnloadedNodeID)
 {
     NexusLoadedAsset->UnloadNode(UnloadedNodeID);
-    if (LastTraversalData.SelectedNodes.Contains(UnloadedNodeID))
-    {
-        LastTraversalData.SelectedNodes.Remove(UnloadedNodeID);
-    }
     SetNodeStatus(UnloadedNodeID, ENodeStatus::Dropped);
 }

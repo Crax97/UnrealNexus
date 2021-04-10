@@ -65,6 +65,7 @@ protected:
 
     mutable int TotalRenderedCount = 0;
     FMaterialRenderProxy* MaterialProxy;
+    FTraversalData LastTraversalData;
 
     void AddCandidate(UINT32 CandidateID, float FirstNodeError);
     void UnloadNode(UINT32 WorstID);
@@ -79,7 +80,7 @@ protected:
 
     void RemoveCandidateWithId(const UINT32 NodeID);
     void BeginFrame(float DeltaSeconds);
-    void Update(FCameraInfo InLastCameraInfo);
+    void Update(FCameraInfo InLastCameraInfo, FTraversalData InLastTraversalData);
     void EndFrame();
 
     bool IsNotOutsideViewFrustum(const FVector& SphereCenter, float SphereRadius) const;
