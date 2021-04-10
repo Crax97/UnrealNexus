@@ -52,7 +52,6 @@ protected:
 
     TArray<FBoxSphereBounds> MeshBounds;
     
-    FTraversalData LastTraversalData;
     FCameraInfo LastCameraInfo;
     TMap<uint32, FNexusNodeRenderData*> LoadedMeshData;
     TArray<FCandidateNode> CandidateNodes;
@@ -80,7 +79,7 @@ protected:
 
     void RemoveCandidateWithId(const UINT32 NodeID);
     void BeginFrame(float DeltaSeconds);
-    void Update(FTraversalData InLastTraversalData, FCameraInfo InLastCameraInfo);
+    void Update(FCameraInfo InLastCameraInfo);
     void EndFrame();
 
     bool IsNotOutsideViewFrustum(const FVector& SphereCenter, float SphereRadius) const;

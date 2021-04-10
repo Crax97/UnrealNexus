@@ -284,11 +284,6 @@ void FUnrealNexusProxy::UnloadNode(UINT32 WorstID)
 {
     Component->UnloadNode(WorstID);
     DropGPUData(WorstID);
-    Component->SetNodeStatus(WorstID, ENodeStatus::Dropped);
-
-    // We should fetch this data dynamically from the component
-    if (LastTraversalData.SelectedNodes.Contains(WorstID))
-        LastTraversalData.SelectedNodes.Remove(WorstID);
 }
 
 void FUnrealNexusProxy::FreeCache(Node* BestNode, const UINT64 BestNodeID)
@@ -387,9 +382,8 @@ void FUnrealNexusProxy::BeginFrame(float DeltaSeconds)
     Component->CurrentError = FMath::Max(Component->TargetError, FMath::Min(Component->MaxError, Component->CurrentError));
 }
 
-void FUnrealNexusProxy::Update(const FTraversalData InLastTraversalData, const FCameraInfo InLastCameraInfo)
+void FUnrealNexusProxy::Update(const FCameraInfo InLastCameraInfo)
 {
-    LastTraversalData = InLastTraversalData;
     LastCameraInfo = InLastCameraInfo;
     if (this->PendingCount >= this->MaxPending)
         return;
@@ -477,7 +471,7 @@ bool FUnrealNexusProxy::CanBeOccluded() const
 void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* View, FMeshElementCollector& Collector, const FEngineShowFlags& EngineShowFlags) const
 {
     int RenderedCount = 0;
-    const TSet<UINT32>& SelectedNodes = LastTraversalData.SelectedNodes;
+    const TSet<UINT32>& SelectedNodes = Component->LastTraversalData.SelectedNodes;
     for (UINT32 Id : SelectedNodes)
     {
         FNexusNodeRenderData* Data = LoadedMeshData[Id];

@@ -78,6 +78,7 @@ private:
     const float Outer_Node_Factor = 100.0f;
     TArray<float> CalculatedErrors;
     UINT64 CurrentCacheSize;
+    FTraversalData LastTraversalData;
 
     float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
     float CalculateErrorForNode(const UINT32 NodeID, bool UseTight) const;
@@ -124,7 +125,7 @@ public:
     int MaxBlockedNodes = 30;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int DrawBudget = 5 * (1 << 20);
+    int DrawBudget = 1024 * 1024 * 1024 * 1; // 1 GB
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0", ClampMax="30"))
     float TargetError = 2.0f;
