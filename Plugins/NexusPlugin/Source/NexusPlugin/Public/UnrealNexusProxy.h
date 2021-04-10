@@ -82,7 +82,7 @@ protected:
     void Update(FTraversalData InLastTraversalData, FCameraInfo InLastCameraInfo);
     void EndFrame();
 
-    bool IsInsideFrustum(const FVector& SphereCenter, float SphereRadius) const;
+    bool IsNotOutsideViewFrustum(const FVector& SphereCenter, float SphereRadius) const;
     
 public:
     explicit FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending = 5);
