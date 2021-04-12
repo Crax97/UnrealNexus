@@ -9,6 +9,10 @@
 #include "Animation/AnimCompress.h"
 #include "Materials/MaterialInstance.h"
 
+DECLARE_STATS_GROUP(TEXT("Unreal Nexus Render Proxy"), STATGROUP_NexusRenderer, STATCAT_Advanced);
+DECLARE_CYCLE_STAT(TEXT("Unreal Nexus Render Update Statistics"), STATID_NexusRenderer, STATGROUP_NexusRenderer)
+DECLARE_CYCLE_STAT(TEXT("Unreal Nexus Render Node Selection Statistics"), STATID_NexusNodeSelection, STATGROUP_NexusRenderer)
+
 template <class T>
 FVertexBufferRHIRef CreateBufferAndFillWithData(const T* Data, const SIZE_T Size)
 {
@@ -378,6 +382,7 @@ void FUnrealNexusProxy::BeginFrame(float DeltaSeconds)
 
 void FUnrealNexusProxy::Update(const FCameraInfo InLastCameraInfo, const FTraversalData InLastTraversalData)
 {
+    DECLARE_SCOPE_CYCLE_COUNTER(TEXT("Nexus Proxy Update"), CYCLEID_NexusRenderer, STATGROUP_NexusRenderer);
     LastCameraInfo = InLastCameraInfo;
     LastTraversalData = InLastTraversalData;
     if (this->PendingCount >= this->MaxPending)
@@ -470,6 +475,8 @@ bool FUnrealNexusProxy::CanBeOccluded() const
 
 void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* View, FMeshElementCollector& Collector, const FEngineShowFlags& EngineShowFlags) const
 {
+    
+    DECLARE_SCOPE_CYCLE_COUNTER(TEXT("Nexus Edge Selection"), CYCLEID_NexusNodeSelection, STATGROUP_NexusRenderer);
     int RenderedCount = 0;
     const TSet<UINT32> SelectedNodes = LastTraversalData.SelectedNodes;
     for (UINT32 Id : SelectedNodes)

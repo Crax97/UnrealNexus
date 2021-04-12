@@ -12,6 +12,9 @@ constexpr bool GBCheckInvariants = false;
 
 using namespace nx;
 
+DECLARE_STATS_GROUP(TEXT("Unreal Nexus Traversal"), STATGROUP_NexusTraversal, STATCAT_Advanced);
+DECLARE_CYCLE_STAT(TEXT("Unreal Nexus Traversal Statistics"), STATID_NexusTraversal, STATGROUP_NexusTraversal)
+
 // One unit in Unreal is 100cms
 constexpr float GUnrealScaleConversion = 1.0f;
 
@@ -255,6 +258,7 @@ void UUnrealNexusComponent::ClearErrors()
 FTraversalData UUnrealNexusComponent::DoTraversal()
 {
     checkf(Proxy, TEXT("Tried to traverse the tree without a proxy (cache)"));
+    DECLARE_SCOPE_CYCLE_COUNTER(TEXT("NexusTraversalCounter"), CYCLEID_NexusTraversal, STATGROUP_NexusTraversal);
     FTraversalData TraversalData;
     TArray<FTraversalElement>& VisitingNodes = TraversalData.TraversalQueue;
     TSet<UINT32>& BlockedNodes = TraversalData.BlockedNodes, &SelectedNodes = TraversalData.SelectedNodes;
