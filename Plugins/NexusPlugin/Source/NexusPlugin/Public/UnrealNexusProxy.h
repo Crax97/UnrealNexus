@@ -38,6 +38,13 @@ struct FCandidateNode
     }
 };
 
+enum class EFrustumCullingResult
+{
+    Inside,
+    Intersects,
+    Outside
+};
+
 class FUnrealNexusProxy final
     : public FPrimitiveSceneProxy
 {
@@ -83,7 +90,7 @@ protected:
     void Update(FCameraInfo InLastCameraInfo, FTraversalData InLastTraversalData);
     void EndFrame();
 
-    bool IsNotOutsideViewFrustum(const FVector& SphereCenter, float SphereRadius) const;
+    bool IsContainedInViewFrustum(const FVector& SphereCenter, float SphereRadius) const;
     
 public:
     explicit FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending = 5);

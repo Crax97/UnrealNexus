@@ -69,6 +69,7 @@ private:
     float CurrentError = 0.0f;
     bool bWasInit = false;
     bool bIsTraversalEnabled = true;
+    bool bIsFrustumCullingEnabled = true;
 
     // TODO: Load first node and calculate Radius based on that
     float ComponentBoundsRadius = 1000.0f;
@@ -144,6 +145,12 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintPure)
     FORCEINLINE bool IsTraversalEnabled() const { return bIsTraversalEnabled; }
+    
+    UFUNCTION(BlueprintCallable)
+    void ToggleFrustumCulling(bool NewFrustumCullingState);
+
+    UFUNCTION(BlueprintCallable, BlueprintPure)
+    FORCEINLINE bool IsFrustumCullingEnabled() const { return bIsFrustumCullingEnabled; }
     
     /*
     UFUNCTION(BlueprintCallable)

@@ -1,4 +1,6 @@
 ﻿#include "UnrealNexusProxy.h"
+
+#include "DrawDebugHelpers.h"
 #include "UnrealNexusData.h"
 #include "UnrealNexusNodeData.h"
 
@@ -244,17 +246,9 @@ FNexusNodeRenderData::~FNexusNodeRenderData()
 }
 
 
-bool FUnrealNexusProxy::IsNotOutsideViewFrustum(const FVector& SphereCenter, const float SphereRadius) const
-{   
-    auto& Planes = LastCameraInfo.ViewFrustum.Planes;
-    for(auto& Plane : Planes)
-    {
-        if (Plane.PlaneDot(SphereCenter) + SphereRadius < 0)
-        {
-            return false;
-        }
-    }
-    return true;
+bool FUnrealNexusProxy::IsContainedInViewFrustum(const FVector& SphereCenter, const float SphereRadius) const
+{
+    return LastCameraInfo.ViewFrustum.IntersectSphere(SphereCenter, SphereRadius);
 }
 
 FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const int InMaxPending)
@@ -499,10 +493,10 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
                 break;
             }
         }
-        if(!IsVisible) continue;
+        if(Component->bIsFrustumCullingEnabled && !IsVisible) continue;
 
-        const float ScaleFactor = 5.f;
-        if (!IsNotOutsideViewFrustum( VcgPoint3FToVector(CurrentNode.NexusNode.sphere.Center()), CurrentNode.NexusNode.tight_radius * ScaleFactor))
+        if (!IsContainedInViewFrustum( VcgPoint3FToVector(CurrentNode.NexusNode.sphere.Center()),
+            CurrentNode.NexusNode.tight_radius))
         {
             continue;
         }

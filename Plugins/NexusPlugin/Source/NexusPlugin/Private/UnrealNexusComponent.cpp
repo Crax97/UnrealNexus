@@ -104,6 +104,11 @@ void UUnrealNexusComponent::ToggleTraversal(const bool NewTraversalState)
     bIsTraversalEnabled = NewTraversalState;
 }
 
+void UUnrealNexusComponent::ToggleFrustumCulling(bool NewFrustumCullingState)
+{
+    bIsFrustumCullingEnabled = NewFrustumCullingState;
+}
+
 void UUnrealNexusComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials) const
 {
     if (ModelMaterial != nullptr)
@@ -151,14 +156,15 @@ void UUnrealNexusComponent::UpdateCameraView()
     ScreenMiddle = CameraInfo.WorldToModelMatrix.TransformPosition(ScreenMiddle);
     ScreenRight = CameraInfo.WorldToModelMatrix.TransformPosition(ScreenRight);
 
-    const auto TransposedInversedWorldToModel = CameraInfo.WorldToModelMatrix.Inverse().GetTransposed();
-    
+    GetViewFrustumBounds(CameraInfo.ViewFrustum, SceneView->ViewMatrices.GetViewProjectionMatrix(), true);
     // Transforming everything into model space
+    
     for (UINT32 i = 0; i < 5; i ++)
     {
         FPlane& Current = CameraInfo.ViewFrustum.Planes[i];
-        Current = TransposedInversedWorldToModel.TransformFVector4(Current);
+        Current = Current.TransformBy(CameraInfo.WorldToModelMatrix);
     }
+    
 
     CameraInfo.ViewFrustum.Init();
 
@@ -177,6 +183,14 @@ void UUnrealNexusComponent::UpdateCameraView()
         DrawDebugPoint(GetWorld(), ScreenLeft, 20.0f, FColor::Green);
         DrawDebugPoint(GetWorld(), ScreenMiddle, 20.0f, FColor::White);
         DrawDebugPoint(GetWorld(), ScreenRight, 20.0f, FColor::Red);
+
+        FlushPersistentDebugLines(GetWorld());
+        for (int i = 0; i < 5; i ++)
+        {
+            const auto& Plane = CameraInfo.ViewFrustum.Planes[i];
+            const int Percent = (static_cast<float>(i) / 4.0f) * 255;
+            DrawDebugPoint(GetWorld(), Plane, 10.0f, FColor(Percent, Percent, Percent), true);
+        }
     }
     CameraInfo.IsUsingSameResolutionAsBefore = CameraInfo.CurrentResolution == ResolutionThisFrame;
     CameraInfo.CurrentResolution = ResolutionThisFrame;
@@ -343,6 +357,11 @@ void UUnrealNexusComponent::UpdateRemainingErrors(TArray<float>& InstanceErrors)
         {
             InstanceErrors[NodeID] = NodeError;
             SetErrorForNode(NodeID, FMath::Max( GetErrorForNode(NodeID),  NodeError));
+        }
+
+        if (bShowDebugStuff)
+        {
+            DrawDebugSphere(GetWorld(), VcgPoint3FToVector(NexusLoadedAsset->Nodes[NodeID].NexusNode.sphere.Center()), NexusLoadedAsset->Nodes[NodeID].NexusNode.tight_radius, 8, FColor::Red);
         }
     }
 }
