@@ -81,6 +81,7 @@ void FNexusNodeRenderData::InitTexBuffer(const FUnrealNexusProxy* Proxy, Signatu
         }
     }
     else {
+        UE_LOG(NexusInfo, Display, TEXT("This node has no textures"));
         FMemory::Memset(TexCoords.GetData(), 0, TexCoords.Num() * sizeof(FVector2D));
     }
     TexCoordsBuffer.VertexBufferRHI = CreateBufferAndFillWithData(TexCoords.GetData(), TexCoords.Num() * sizeof(FVector2D));
@@ -292,9 +293,9 @@ void FUnrealNexusProxy::FreeCache(Node* BestNode, const UINT64 BestNodeID)
         UINT32 WorstID = 0;
         TArray<UINT32> LoadedNodes;
         LoadedMeshData.GenerateKeyArray(LoadedNodes);
-        for (auto& Pair : LoadedMeshData)
+        for (UINT32 ID : LoadedNodes)
         {
-            const UINT64 ID = Pair.Key;
+            if(!LoadedMeshData.Contains(ID)) return;
             Node* SelectedNode = &ComponentData->Nodes[ID].NexusNode;
             const float SelectedNodeError = Component->GetErrorForNode(ID);
             if (!Worst || SelectedNodeError < Component->GetErrorForNode(WorstID))
