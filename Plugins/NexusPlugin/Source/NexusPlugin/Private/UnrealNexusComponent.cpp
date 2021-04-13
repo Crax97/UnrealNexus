@@ -380,6 +380,7 @@ void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,
         FActorComponentTickFunction* ThisTickFunction)
 {
     if (!Proxy || !bIsTraversalEnabled) return;
+    if(!NexusLoadedAsset) return;
     UpdateCameraView();
     const FTraversalData LastTraversalData = DoTraversal();
     Proxy->Update(CameraInfo, LastTraversalData);
