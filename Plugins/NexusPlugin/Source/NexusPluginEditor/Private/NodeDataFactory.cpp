@@ -18,9 +18,9 @@ UNodeDataFactory::UNodeDataFactory(const FObjectInitializer& ObjectInitializer)
     bCreateNew = false;
 }
 
-UUnrealNexusNodeData* UNodeDataFactory::CreateNodeAssetFile(UPackage* NodePackage, FString& NodeName)
+UUnrealNexusNodeData* UNodeDataFactory::CreateNodeAssetFile(UPackage* NodePackage, FString& NodeName, EObjectFlags Flags)
 {
-    UObject* ObjectCreated = FactoryCreateNew(SupportedClass, NodePackage, *NodeName, RF_Standalone, nullptr, GWarn);
+    UObject* ObjectCreated = FactoryCreateNew(SupportedClass, NodePackage, *NodeName, Flags, nullptr, GWarn);
     UUnrealNexusNodeData* NewNode = Cast<UUnrealNexusNodeData>(ObjectCreated);
 
     FAssetRegistryModule::AssetCreated(NewNode);

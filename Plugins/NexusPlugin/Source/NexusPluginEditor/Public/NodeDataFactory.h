@@ -18,5 +18,5 @@ class UNodeDataFactory final : public UFactory
     
 public:
     explicit UNodeDataFactory(const FObjectInitializer& ObjectInitializer);
-    class UUnrealNexusNodeData* CreateNodeAssetFile(UPackage* NodePackage, FString& NodeName);
+    class UUnrealNexusNodeData* CreateNodeAssetFile(UPackage* NodePackage, FString& NodeName, EObjectFlags Flags);
 };

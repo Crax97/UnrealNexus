@@ -63,8 +63,6 @@ protected:
     TMap<uint32, FNexusNodeRenderData*> LoadedMeshData;
     TArray<FCandidateNode> CandidateNodes;
     bool bIsWireframe = false;
-    bool bIsReady = false;
-    bool bIsPlaying = false;
     
     int PendingCount = 0;
     int MaxPending = 0;
@@ -113,10 +111,4 @@ public:
     virtual void DrawStaticElements(FStaticPrimitiveDrawInterface* PDI) override;
     virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
     TArray<UINT32> GetLoadedNodes() const;
-    void GetReady()
-    {
-        bIsReady = true;
-        bIsPlaying = true;
-    }
-    bool IsReady() const { return bIsReady; }
 };

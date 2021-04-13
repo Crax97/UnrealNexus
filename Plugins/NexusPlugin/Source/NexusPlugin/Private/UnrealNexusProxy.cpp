@@ -73,20 +73,15 @@ void FNexusNodeRenderData::CreatePositionBuffer(nx::Node& Node, nx::NodeData& Da
 
 void FNexusNodeRenderData::InitTexBuffer(const FUnrealNexusProxy* Proxy, Signature& TheSig, NodeData& Data, Node& Node)
 {
-    TArray<FVector2D> TexCoords;
-    TexCoords.SetNum(Node.nvert);
     if (TheSig.vertex.hasTextures()) {
-        vcg::Point2f* Points = Data.texCoords(TheSig, Node.nvert);
-        for (int i = 0; i < Node.nvert; i++) {
-            vcg::Point2f Coord = Points[i];
-            TexCoords[i] = { Coord.X(), Coord.Y() };
-        }
-    }
-    else {
+        TexCoordsBuffer.VertexBufferRHI = CreateBufferAndFillWithData(Data.texCoords(TheSig, Node.nvert), Node.nvert * sizeof(vcg::Point2f));
+    } else {
+        TArray<FVector2D> TexCoords;
+        TexCoords.SetNum(Node.nvert);
         UE_LOG(NexusInfo, Display, TEXT("This node has no textures"));
         FMemory::Memset(TexCoords.GetData(), 0, TexCoords.Num() * sizeof(FVector2D));
+        TexCoordsBuffer.VertexBufferRHI = CreateBufferAndFillWithData(TexCoords.GetData(), TexCoords.Num() * sizeof(FVector2D));
     }
-    TexCoordsBuffer.VertexBufferRHI = CreateBufferAndFillWithData(TexCoords.GetData(), TexCoords.Num() * sizeof(FVector2D));
     TexCoordsBuffer.ShaderResourceViewRHI = RHICreateShaderResourceView(FShaderResourceViewInitializer(TexCoordsBuffer.VertexBufferRHI, PF_G32R32F));
     BeginInitResource(&TexCoordsBuffer);
 }
@@ -571,7 +566,7 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
 void FUnrealNexusProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views,
                                                const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
 {
-    if(!bIsReady) return;
+    if(!ComponentData) return;
     for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
     {
         const auto& EngineShowFlags = ViewFamily.EngineShowFlags;
@@ -621,11 +616,11 @@ FPrimitiveViewRelevance FUnrealNexusProxy::GetViewRelevance(const FSceneView* Vi
     FPrimitiveViewRelevance Result;
     Result.bOpaque = true;
     Result.bDrawRelevance = IsShown(View);
-    Result.bShadowRelevance = IsShadowCast(View);
+    Result.bShadowRelevance = true;
     Result.bRenderInMainPass = true;
     Result.bVelocityRelevance = IsMovable() && Result.bOpaque && Result.bRenderInMainPass;
-    Result.bDynamicRelevance = bIsPlaying;
-    Result.bStaticRelevance = !bIsPlaying;
+    Result.bDynamicRelevance = true;
+    // Result.bStaticRelevance = !bIsPlaying;
     return Result;
 }
 

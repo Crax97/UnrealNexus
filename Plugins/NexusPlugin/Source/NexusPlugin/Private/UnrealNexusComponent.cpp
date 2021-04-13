@@ -38,16 +38,12 @@ UUnrealNexusComponent::UUnrealNexusComponent(const FObjectInitializer& Initializ
 
 UUnrealNexusComponent::~UUnrealNexusComponent()
 {
+    if(!NexusLoadedAsset) return;
     TArray<UINT32> LoadedIDs;
     NodeStatuses.GetKeys(LoadedIDs);
     for (const int N : LoadedIDs)
     {
         NexusLoadedAsset->UnloadNode(N);
-    }
-    
-    if (Proxy && Proxy->IsReady())
-    {
-        Proxy->Flush();
     }
 }
 
@@ -208,8 +204,6 @@ void UUnrealNexusComponent::InitializeComponent()
     NodeStatuses.Reserve(NexusLoadedAsset->Nodes.Num());
     ComponentBoundsRadius = NexusLoadedAsset->BoundingSphere().Radius(); 
     Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), ComponentBoundsRadius * 10.0f));
-    
-    Proxy->GetReady();
 }
 
 void UUnrealNexusComponent::OnRegister()
