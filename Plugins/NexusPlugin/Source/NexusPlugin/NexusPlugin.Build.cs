@@ -47,13 +47,6 @@ public class NexusPlugin : ModuleRules
 			"RHI", "RenderCore" });
 			
 		
-		PrivateDependencyModuleNames.AddRange(
-			new string[]
-			{
-				"UnrealEd",
-			}
-			);
-		
 		
 		DynamicallyLoadedModuleNames.AddRange(
 			new string[]

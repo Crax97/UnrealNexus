@@ -1,12 +1,14 @@
 ﻿#include "UnrealNexusData.h"
 #include "UnrealNexusNodeData.h"
-#include "NexusUtils.h"
+#include "NexusCommons.h"
 
 #include "corto/decoder.h"
 #include "Engine/StreamableManager.h"
 #include "HAL/FileManagerGeneric.h"
 // #include "space/intersection3.h"
 // #include "space/line3.h"
+
+using namespace NexusCommons;
 
 class FArchiveFileReaderGeneric;
 DEFINE_LOG_CATEGORY(NexusInfo);
@@ -34,7 +36,7 @@ char* ToRGBA8888(char* RawData, const nx::TextureData& Data)
 
 void LoadImageRawData(UTexture2D* Image, TextureData& Data)
 {
-    char* DataPtr = static_cast<char*>(Image->PlatformData->Mips[0].BulkData.Lock(LOCK_READ_WRITE));
+    char* DataPtr = reinterpret_cast<char*>(Image->PlatformData->Mips[0].BulkData.Lock(LOCK_READ_WRITE));
     FMemory::Memcpy(DataPtr, Data.memory, Data.height * Data.width * 4);
     Image->PlatformData->Mips[0].BulkData.Unlock();
     Image->PlatformData->SetNumSlices(1);

@@ -18,7 +18,7 @@ struct FUnrealNexusNode {
 };
 
 UCLASS()
-class UUnrealNexusData final : public UObject
+class NEXUSPLUGIN_API UUnrealNexusData final : public UObject
 {
     GENERATED_BODY()
 

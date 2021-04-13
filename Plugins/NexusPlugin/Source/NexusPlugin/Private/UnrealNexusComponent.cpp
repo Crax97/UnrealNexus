@@ -1,5 +1,4 @@
 ﻿#include "UnrealNexusComponent.h"
-#include "NexusUtils.h"
 
 #include "UnrealNexusData.h"
 #include "UnrealNexusNodeData.h"
@@ -7,6 +6,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/LocalPlayer.h"
 #include "DrawDebugHelpers.h"
+#include "NexusCommons.h"
+using namespace NexusCommons;
 
 constexpr bool GBCheckInvariants = false;
 

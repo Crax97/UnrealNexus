@@ -4,10 +4,12 @@
 #include "UnrealNexusData.h"
 #include "UnrealNexusNodeData.h"
 
-#include "NexusUtils.h"
+#include "NexusCommons.h"
 #include "NexusJobExecutorThread.h"
 #include "Animation/AnimCompress.h"
 #include "Materials/MaterialInstance.h"
+
+using namespace NexusCommons;
 
 DECLARE_STATS_GROUP(TEXT("Unreal Nexus Render Proxy"), STATGROUP_NexusRenderer, STATCAT_Advanced);
 DECLARE_CYCLE_STAT(TEXT("Unreal Nexus Render Update Statistics"), STATID_NexusRenderer, STATGROUP_NexusRenderer)

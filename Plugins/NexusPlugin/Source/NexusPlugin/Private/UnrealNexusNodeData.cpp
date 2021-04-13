@@ -1,7 +1,7 @@
 ﻿#include "UnrealNexusNodeData.h"
 #include "UnrealNexusData.h"
 
-#include "NexusUtils.h"
+#include "NexusCommons.h"
 
 void UUnrealNexusNodeData::DecodeData(Header& Header, const int VertsCount, const int FacesCount)
 {

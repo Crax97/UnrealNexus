@@ -53,7 +53,7 @@ struct FTraversalData
 
 
 UCLASS(meta = (BlueprintSpawnableComponent))
-class UUnrealNexusComponent final
+class NEXUSPLUGIN_API UUnrealNexusComponent final
     : public UPrimitiveComponent
 {
     GENERATED_BODY()

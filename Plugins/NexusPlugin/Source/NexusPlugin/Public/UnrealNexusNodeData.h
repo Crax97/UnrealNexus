@@ -6,7 +6,7 @@
 #include "UnrealNexusNodeData.generated.h"
 
 UCLASS()
-class UUnrealNexusNodeData final : public UObject
+class NEXUSPLUGIN_API UUnrealNexusNodeData final : public UObject
 {
     GENERATED_BODY()
 private:
