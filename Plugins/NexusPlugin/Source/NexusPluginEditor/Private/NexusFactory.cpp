@@ -119,7 +119,8 @@ void UNexusFactory::InitData(UUnrealNexusData* Data,  UPackage* DataPackage, uin
         auto& UCurrentNode = Data->Nodes[i];
         auto& UNextNode = Data->Nodes[i + 1];
         auto NodeName = FPaths::GetBaseFilename(NodePathString);
-        UUnrealNexusNodeData* UNodeData = NodeFactory->CreateNodeAssetFile(DataPackage, NodeName);
+        UPackage* NexusNodeDataPackage = CreatePackage(DataPackage, *NodePathString);
+        UUnrealNexusNodeData* UNodeData = NodeFactory->CreateNodeAssetFile(NexusNodeDataPackage, NodeName);
         UNodeData->NodeSize = UNextNode.NexusNode.getBeginOffset() - UCurrentNode.NexusNode.getBeginOffset();
         UNodeData->NexusNodeData.memory = new char[UNodeData->NodeSize];
 
