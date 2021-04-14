@@ -287,12 +287,6 @@ FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const 
         Component(TheComponent),
         MaxPending(InMaxPending)
 {
-    if (TheComponent->IsNodeLoaded(0))
-    {
-        LoadGPUData(0);
-    }
-    JobExecutor = new FNexusJobExecutorThread(nullptr);
-    JobThread = FRunnableThread::Create(JobExecutor, TEXT("Nexus Node Loader"));
     SetWireframeColor(FLinearColor::Green);
 
     MaterialProxy = Component->ModelMaterial == nullptr ?
@@ -336,6 +330,17 @@ void FUnrealNexusProxy::FreeCache(Node* BestNode, const UINT64 BestNodeID)
         UnloadNode(WorstID);
     }
 
+}
+
+void FUnrealNexusProxy::InitializeThreads()
+{
+    
+    if (Component->IsNodeLoaded(0))
+    {
+        LoadGPUData(0);
+    }
+    JobExecutor = new FNexusJobExecutorThread(nullptr);
+    JobThread = FRunnableThread::Create(JobExecutor, TEXT("Nexus Node Loader"));
 }
 
 void FUnrealNexusProxy::Flush()
@@ -453,10 +458,13 @@ void FUnrealNexusProxy::Update(const FCameraInfo InLastCameraInfo, const FTraver
 FUnrealNexusProxy::~FUnrealNexusProxy()
 {
     // Kill the Job thread
-    JobExecutor->Stop();
-    JobThread->Kill();
-    delete JobExecutor;
-    delete JobThread;
+    if (JobExecutor)
+    {
+        JobExecutor->Stop();
+        JobThread->Kill();
+        delete JobExecutor;
+        delete JobThread;
+    }
     
 }
 

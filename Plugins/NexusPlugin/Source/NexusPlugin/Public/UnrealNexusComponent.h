@@ -86,7 +86,6 @@ private:
     void UpdateRemainingErrors(TArray<float>& InstanceErrors);
     void UpdateCameraView();
     void InitializeComponent();
-    virtual void OnRegister() override;
     virtual void BeginPlay() override;
 protected:
     class FUnrealNexusProxy* Proxy = nullptr;

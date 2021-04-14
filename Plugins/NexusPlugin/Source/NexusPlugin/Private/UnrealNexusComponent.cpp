@@ -206,20 +206,12 @@ void UUnrealNexusComponent::InitializeComponent()
     Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), ComponentBoundsRadius * 10.0f));
 }
 
-void UUnrealNexusComponent::OnRegister()
-{
-    Super::OnRegister();
-    if(!NexusLoadedAsset || !Proxy) return;
-    
-    InitializeComponent();
-    bWasInit = true;
-}
-
 void UUnrealNexusComponent::BeginPlay()
 {
     Super::BeginPlay();
     if (bWasInit) return;
     if(!NexusLoadedAsset || !Proxy) return;
+    Proxy->InitializeThreads();
     InitializeComponent();
     bWasInit = true;
     

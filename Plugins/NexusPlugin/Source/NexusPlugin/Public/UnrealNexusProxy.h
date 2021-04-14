@@ -59,8 +59,8 @@ protected:
     class UUnrealNexusData* ComponentData;
     class UUnrealNexusComponent* Component;
     
-    class FRunnableThread* JobThread;
-    class FNexusJobExecutorThread* JobExecutor;
+    class FRunnableThread* JobThread = nullptr;
+    class FNexusJobExecutorThread* JobExecutor = nullptr;
 
     TArray<FBoxSphereBounds> MeshBounds;
     
@@ -79,7 +79,8 @@ protected:
 
     void AddCandidate(UINT32 CandidateID, float FirstNodeError);
     void UnloadNode(UINT32 WorstID);
-
+    void InitializeThreads();
+    
     // Removes the worst node in the cache until there's enough space to load other nodes
     void FreeCache(Node* BestNode, const UINT64 BestNodeID);
 
