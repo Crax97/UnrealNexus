@@ -35,7 +35,8 @@ FNexusNodeRenderData::FNexusNodeRenderData(const FUnrealNexusProxy* Proxy, NodeD
     NumPrimitives = Node.nface;
     CreatePositionBuffer(Node, Data);
     CreateIndexBuffer(TheSig, Node, Data);
-    
+
+    InitColorBuffer(Proxy, TheSig, Data, Node);
     InitTexBuffer(Proxy,  TheSig, Data, Node);
     InitTangentsBuffer(Proxy, TheSig, Data, Node);
     InitVertexFactory();
@@ -69,6 +70,18 @@ void FNexusNodeRenderData::CreatePositionBuffer(nx::Node& Node, nx::NodeData& Da
     PositionBuffer.VertexBufferRHI = CreateBufferAndFillWithData(Vertices.GetData(), Vertices.Num() * sizeof(FVector));
     PositionBuffer.ShaderResourceViewRHI = RHICreateShaderResourceView(FShaderResourceViewInitializer(PositionBuffer.VertexBufferRHI, PF_R32_FLOAT));
     BeginInitResource(&PositionBuffer);
+}
+
+
+void FNexusNodeRenderData::InitColorBuffer(const FUnrealNexusProxy* Proxy, Signature& TheSig, NodeData& Data, Node& Node)
+{
+    bHasColors = TheSig.vertex.hasColors();
+    if (bHasColors)
+    {
+        ColorBuffer.VertexBufferRHI = CreateBufferAndFillWithData(Data.colors(TheSig, Node.nvert), Node.nvert * sizeof(FColor));
+        ColorBuffer.ShaderResourceViewRHI = RHICreateShaderResourceView(FShaderResourceViewInitializer(ColorBuffer.VertexBufferRHI, PF_R8G8B8A8));
+        BeginInitResource(&ColorBuffer);
+    }
 }
 
 void FNexusNodeRenderData::InitTexBuffer(const FUnrealNexusProxy* Proxy, Signature& TheSig, NodeData& Data, Node& Node)
@@ -180,13 +193,18 @@ void FNexusNodeRenderData::InitVertexFactory()
         FVertexBufferWithSRV* PositionBuffer;
         FVertexBufferWithSRV* TexCoordsBuffer;
         FVertexBufferWithSRV* TangentBuffer;
+        FVertexBuffer* ColorBuffer;
+        FRHIShaderResourceView* ColorBufferSRV;
         // All the other members
     } Params;
+    
     Params.VertexFactory = &NodeVertexFactory;
     Params.PositionBuffer = &PositionBuffer;
     Params.TexCoordsBuffer = &TexCoordsBuffer;
     Params.TangentBuffer = &TangentBuffer;
-
+    Params.ColorBuffer = bHasColors ? static_cast<FVertexBuffer*>(&ColorBuffer) : &GNullColorVertexBuffer;
+    Params.ColorBufferSRV = bHasColors ? ColorBuffer.ShaderResourceViewRHI : GNullColorVertexBuffer.VertexBufferSRV;
+    
     ENQUEUE_RENDER_COMMAND(NodeInitVertexFactory)([Params](FRHICommandListImmediate& Commands)
         {
             FLocalVertexFactory::FDataType Data;
@@ -230,8 +248,18 @@ void FNexusNodeRenderData::InitVertexFactory()
         
             Data.LightMapCoordinateIndex = 0;
             Data.NumTexCoords = 1;
+        
+            Data.ColorIndexMask = 0;
 
-            FColorVertexBuffer::BindDefaultColorVertexBuffer(Params.VertexFactory, Data, FColorVertexBuffer::NullBindStride::FColorSizeForComponentOverride);
+            Data.ColorComponentsSRV = Params.ColorBufferSRV;
+            Data.ColorComponent = FVertexStreamComponent(
+                Params.ColorBuffer,
+                0, // Struct offset to color
+                sizeof(FColor), //asserted elsewhere
+                VET_Color,
+                (EVertexStreamUsage::ManualFetch)
+            );
+        
             Params.VertexFactory->SetData(Data);
             Params.VertexFactory->InitResource();
 

@@ -7,13 +7,18 @@ class FNexusNodeRenderData
 public:
     FLocalVertexFactory NodeVertexFactory;
     FVertexBufferWithSRV PositionBuffer;
+    FVertexBufferWithSRV ColorBuffer;
     FVertexBufferWithSRV TexCoordsBuffer;
     FVertexBufferWithSRV TangentBuffer;
     FIndexBuffer IndexBuffer;
+
+    bool bHasColors = false;
+    
     int NumPrimitives;
 
     FNexusNodeRenderData(const FUnrealNexusProxy* Proxy, NodeData& Data, Node& Node);
     void CreatePositionBuffer(nx::Node& Node, nx::NodeData& Data);
+    void InitColorBuffer(const FUnrealNexusProxy* Proxy, Signature& TheSig, NodeData& Data, Node& Node);
     void CreateIndexBuffer(Signature& Sig, Node& Node, nx::NodeData& Data);
     void InitTexBuffer(const FUnrealNexusProxy* Proxy, Signature& TheSig, NodeData& Data, Node& Node);
     static void CalculateTangents(TArray<FPackedNormal>& OutTangents, Signature& TheSig,  NodeData& Data, Node& Node);
