@@ -14,7 +14,7 @@ private:
     
 public:
     nx::NodeData NexusNodeData;
-    UINT32 NodeSize = 0;
+    uint32 NodeSize = 0;
     
     FORCEINLINE bool IsDataDecoded() const { return DidDecodeData; }
     void DecodeData(nx::Header& Header, int VertsCount, int FacesCount);

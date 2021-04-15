@@ -21,9 +21,9 @@ void UUnrealNexusNodeData::SerializeNodeData(FArchive& Archive, nx::NodeData& No
         NodeData.memory = new char[NodeSize];
     }
     
-    for (UINT32 i = 0; i < NodeSize; i ++)
+    for (uint32 i = 0; i < NodeSize; i ++)
     {
-        UINT16 Index = NodeData.memory[i];
+        uint16 Index = NodeData.memory[i];
         Archive << Index;
         NodeData.memory[i] = Index;
     }

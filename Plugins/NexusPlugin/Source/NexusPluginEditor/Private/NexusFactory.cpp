@@ -160,7 +160,7 @@ void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer, const uint8
         auto& Node = Data->Nodes[j].NexusNode;
         auto& LastNode = Data->Nodes[j + 1].NexusNode;
         for(uint32_t i = Node.first_patch; i < LastNode.first_patch; i++)
-            if(Patches[i].node < static_cast<UINT32>(Data->RootsCount))
+            if(Patches[i].node < static_cast<uint32>(Data->RootsCount))
                 Data->RootsCount = Patches[i].node;
     }
 }

@@ -21,7 +21,7 @@ FStreamableManager& NexusCommons::GetStreamableManager()
 }
 
 
-void LoadUtils::LoadNodeData(nx::Header& Header, int VertCount, int FacesCount, nx::NodeData& TheNodeData, const UINT64 DataSizeOnDisk)
+void LoadUtils::LoadNodeData(nx::Header& Header, int VertCount, int FacesCount, nx::NodeData& TheNodeData, const uint64 DataSizeOnDisk)
 {
 	nx::Signature& Signature = Header.signature;
 	if (!Signature.isCompressed())
@@ -29,12 +29,12 @@ void LoadUtils::LoadNodeData(nx::Header& Header, int VertCount, int FacesCount, 
 		return;
 	} else if (Signature.flags & nx::Signature::CORTO)
 	{
-		const UINT32 RealSize = VertCount * Signature.vertex.size() + FacesCount * Signature.face.size();
+		const uint32 RealSize = VertCount * Signature.vertex.size() + FacesCount * Signature.face.size();
 		char* Buffer = new char[DataSizeOnDisk];
 		FMemory::Memcpy(Buffer, TheNodeData.memory, DataSizeOnDisk);
 		delete[] TheNodeData.memory;
 		TheNodeData.memory = new char[RealSize];
-		UINT32 Magic = *reinterpret_cast<UINT32*>(Buffer);
+		uint32 Magic = *reinterpret_cast<uint32*>(Buffer);
 		char Magic0 = Buffer[0];
 		char Magic1 = Buffer[1];
 		char Magic2 = Buffer[2];

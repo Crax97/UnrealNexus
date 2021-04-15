@@ -39,7 +39,7 @@ UUnrealNexusComponent::UUnrealNexusComponent(const FObjectInitializer& Initializ
 UUnrealNexusComponent::~UUnrealNexusComponent()
 {
     if(!NexusLoadedAsset) return;
-    TArray<UINT32> LoadedIDs;
+    TArray<uint32> LoadedIDs;
     NodeStatuses.GetKeys(LoadedIDs);
     for (const int N : LoadedIDs)
     {
@@ -47,17 +47,17 @@ UUnrealNexusComponent::~UUnrealNexusComponent()
     }
 }
 
-void UUnrealNexusComponent::SetErrorForNode(UINT32 NodeID, float Error)
+void UUnrealNexusComponent::SetErrorForNode(uint32 NodeID, float Error)
 {
     CalculatedErrors[NodeID] = Error;
 }
 
-float UUnrealNexusComponent::GetErrorForNode(const UINT32 NodeID) const
+float UUnrealNexusComponent::GetErrorForNode(const uint32 NodeID) const
 {
     return CalculatedErrors[NodeID];
 }
 
-float UUnrealNexusComponent::CalculateErrorForNode(const UINT32 NodeID, const bool UseTight) const
+float UUnrealNexusComponent::CalculateErrorForNode(const uint32 NodeID, const bool UseTight) const
 {
     Node* SelectedNode = &NexusLoadedAsset->Nodes[NodeID].NexusNode;
     vcg::Sphere3f& NodeBoundingSphere = SelectedNode->sphere;
@@ -87,7 +87,7 @@ float UUnrealNexusComponent::CalculateDistanceFromSphereToViewFrustum(const vcg:
     const FConvexVolume& ViewFrustum = CameraInfo.ViewFrustum;
     const FConvexVolume::FPlaneArray& ViewPlanes = ViewFrustum.Planes;
     const FVector SphereCenter = VcgPoint3FToVector(Sphere.Center());
-    for (UINT32 i = 0; i < 5; i ++)
+    for (uint32 i = 0; i < 5; i ++)
     {
         const FPlane CurrentPlane = ViewPlanes[i];
         const float DistanceFromPlane = FVector::Distance(SphereCenter, CurrentPlane);
@@ -159,7 +159,7 @@ void UUnrealNexusComponent::UpdateCameraView()
     GetViewFrustumBounds(CameraInfo.ViewFrustum, SceneView->ViewMatrices.GetViewProjectionMatrix(), true);
     // Transforming everything into model space
     
-    for (UINT32 i = 0; i < 5; i ++)
+    for (uint32 i = 0; i < 5; i ++)
     {
         FPlane& Current = CameraInfo.ViewFrustum.Planes[i];
         Current = Current.TransformBy(CameraInfo.WorldToModelMatrix);
@@ -217,19 +217,19 @@ void UUnrealNexusComponent::BeginPlay()
     
 }
 
-bool UUnrealNexusComponent::IsNodeLoaded(const UINT32 NodeID) const
+bool UUnrealNexusComponent::IsNodeLoaded(const uint32 NodeID) const
 {
     return NodeStatuses.Contains(NodeID) && NodeStatuses[NodeID] == ENodeStatus::Loaded;
 }
 
-void UUnrealNexusComponent::SetNodeStatus(const UINT32 NodeID, const ENodeStatus Status)
+void UUnrealNexusComponent::SetNodeStatus(const uint32 NodeID, const ENodeStatus Status)
 {
     if (Status == ENodeStatus::Dropped)
     {
        NodeStatuses.Remove(NodeID); 
     } else
     {
-        NodeStatuses.Add(TTuple<UINT32, ENodeStatus> {NodeID, Status});
+        NodeStatuses.Add(TTuple<uint32, ENodeStatus> {NodeID, Status});
     }
 }
 
@@ -248,7 +248,7 @@ FTraversalData UUnrealNexusComponent::DoTraversal()
     DECLARE_SCOPE_CYCLE_COUNTER(TEXT("NexusTraversalCounter"), CYCLEID_NexusTraversal, STATGROUP_NexusTraversal);
     FTraversalData TraversalData;
     TArray<FTraversalElement>& VisitingNodes = TraversalData.TraversalQueue;
-    TSet<UINT32>& BlockedNodes = TraversalData.BlockedNodes, &SelectedNodes = TraversalData.SelectedNodes;
+    TSet<uint32>& BlockedNodes = TraversalData.BlockedNodes, &SelectedNodes = TraversalData.SelectedNodes;
     TArray<float>& InstanceErrors = TraversalData.InstanceErrors;
     InstanceErrors.SetNum(NexusLoadedAsset->Header.n_nodes);
 
@@ -324,7 +324,7 @@ void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElem
     }
 }
 
-void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, const UINT32 NewNodeId)
+void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, const uint32 NewNodeId)
 {
     TraversalData.VisitedNodes.Add(NewNodeId);
     Node* NewNode = &NexusLoadedAsset->Nodes[NewNodeId].NexusNode;
@@ -339,7 +339,7 @@ void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, co
 
 void UUnrealNexusComponent::UpdateRemainingErrors(TArray<float>& InstanceErrors)
 {
-    TArray<UINT32> LoadedNodes = Proxy->GetLoadedNodes();
+    TArray<uint32> LoadedNodes = Proxy->GetLoadedNodes();
     for (auto& NodeID : LoadedNodes)
     {
         // const Node& TheNode = NexusLoadedAsset->nodes[NodeID];
@@ -373,14 +373,14 @@ void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     Proxy->Update(CameraInfo, LastTraversalData);
 }
 
-UINT64 UUnrealNexusComponent::GetNodeSize(const uint32 NodeID) const
+uint64 UUnrealNexusComponent::GetNodeSize(const uint32 NodeID) const
 {
     auto& Node = NexusLoadedAsset->Nodes[NodeID];
     auto& NextNode = NexusLoadedAsset->Nodes[NodeID + 1];
     return (NextNode.NexusNode.getBeginOffset() - Node.NexusNode.getBeginOffset());
 }
 
-void UUnrealNexusComponent::UnloadNode(UINT32 UnloadedNodeID)
+void UUnrealNexusComponent::UnloadNode(uint32 UnloadedNodeID)
 {
     NexusLoadedAsset->UnloadNode(UnloadedNodeID);
     SetNodeStatus(UnloadedNodeID, ENodeStatus::Dropped);

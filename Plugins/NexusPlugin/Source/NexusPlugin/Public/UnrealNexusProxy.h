@@ -29,15 +29,15 @@ public:
 
 struct FCandidateNode
 {
-    UINT32 ID;
+    uint32 ID;
     float FirstNodeError;
     float CandidateError;
 
-    bool operator==(const UINT32 OtherID) const
+    bool operator==(const uint32 OtherID) const
     {
         return OtherID == ID;
     }
-    explicit operator UINT32 () const
+    explicit operator uint32 () const
     {
         return ID;
     }
@@ -77,19 +77,19 @@ protected:
     FMaterialRenderProxy* MaterialProxy;
     FTraversalData LastTraversalData;
 
-    void AddCandidate(UINT32 CandidateID, float FirstNodeError);
-    void UnloadNode(UINT32 WorstID);
+    void AddCandidate(uint32 CandidateID, float FirstNodeError);
+    void UnloadNode(uint32 WorstID);
     void InitializeThreads();
     
     // Removes the worst node in the cache until there's enough space to load other nodes
-    void FreeCache(Node* BestNode, const UINT64 BestNodeID);
+    void FreeCache(Node* BestNode, const uint64 BestNodeID);
 
     // Removes everything from the cache
     void Flush();
     
-    TOptional<TTuple<UINT32, Node*>> FindBestNode();
+    TOptional<TTuple<uint32, Node*>> FindBestNode();
 
-    void RemoveCandidateWithId(const UINT32 NodeID);
+    void RemoveCandidateWithId(const uint32 NodeID);
     void BeginFrame(float DeltaSeconds);
     void Update(FCameraInfo InLastCameraInfo, FTraversalData InLastTraversalData);
     void EndFrame();
@@ -116,5 +116,5 @@ public:
                                         uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
     virtual void DrawStaticElements(FStaticPrimitiveDrawInterface* PDI) override;
     virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
-    TArray<UINT32> GetLoadedNodes() const;
+    TArray<uint32> GetLoadedNodes() const;
 };

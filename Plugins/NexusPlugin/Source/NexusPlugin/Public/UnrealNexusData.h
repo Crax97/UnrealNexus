@@ -45,15 +45,15 @@ public:
     UPROPERTY()
     int RootsCount;
     
-    TMap<UINT32, TSharedPtr<FStreamableHandle>> NodeHandles;
+    TMap<uint32, TSharedPtr<FStreamableHandle>> NodeHandles;
 
     vcg::Sphere3f &BoundingSphere();
     bool Intersects(vcg::Ray3f &Ray, float &Distance);
     uint32_t Size(uint32_t Node);
-    void LoadNodeAsync(const UINT32 NodeID, FStreamableDelegate Callback);
+    void LoadNodeAsync(const uint32 NodeID, FStreamableDelegate Callback);
     void UnloadNode(const int NodeID);
     
-    class UUnrealNexusNodeData* GetNode(UINT32 NodeId);
+    class UUnrealNexusNodeData* GetNode(uint32 NodeId);
 
     // Unreal engine specific stuff
     // Begin UObject interface

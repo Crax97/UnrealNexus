@@ -293,26 +293,26 @@ FUnrealNexusProxy::FUnrealNexusProxy(UUnrealNexusComponent* TheComponent, const 
                     UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy() : Component->ModelMaterial->GetRenderProxy();
 }
 
-void FUnrealNexusProxy::AddCandidate(UINT32 CandidateID, float FirstNodeError)
+void FUnrealNexusProxy::AddCandidate(uint32 CandidateID, float FirstNodeError)
 {
     CandidateNodes.Add(FCandidateNode {CandidateID, FirstNodeError});
 }
 
-void FUnrealNexusProxy::UnloadNode(UINT32 WorstID)
+void FUnrealNexusProxy::UnloadNode(uint32 WorstID)
 {
     Component->UnloadNode(WorstID);
     DropGPUData(WorstID);
 }
 
-void FUnrealNexusProxy::FreeCache(Node* BestNode, const UINT64 BestNodeID)
+void FUnrealNexusProxy::FreeCache(Node* BestNode, const uint64 BestNodeID)
 {
-    while (Component->CurrentCacheSize > static_cast<UINT64>(Component->DrawBudget))
+    while (Component->CurrentCacheSize > static_cast<uint64>(Component->DrawBudget))
     {
         Node* Worst = nullptr;
-        UINT32 WorstID = 0;
-        TArray<UINT32> LoadedNodes;
+        uint32 WorstID = 0;
+        TArray<uint32> LoadedNodes;
         LoadedMeshData.GenerateKeyArray(LoadedNodes);
-        for (UINT32 ID : LoadedNodes)
+        for (uint32 ID : LoadedNodes)
         {
             if(!LoadedMeshData.Contains(ID)) return;
             Node* SelectedNode = &ComponentData->Nodes[ID].NexusNode;
@@ -348,19 +348,19 @@ void FUnrealNexusProxy::Flush()
 #if 0
     if (LoadedMeshData.Num() == 0) 
         return;
-    TArray<UINT32> LoadedNodes;
+    TArray<uint32> LoadedNodes;
     LoadedMeshData.GetKeys(LoadedNodes);
-    for (UINT32 Node : LoadedNodes)
+    for (uint32 Node : LoadedNodes)
     {
         DropGPUData(Node);
     }
 #endif
 }
 
-TOptional<TTuple<UINT32, Node*>> FUnrealNexusProxy::FindBestNode()
+TOptional<TTuple<uint32, Node*>> FUnrealNexusProxy::FindBestNode()
 {
     Node* BestNode = nullptr;
-    UINT32 BestNodeID = 0;
+    uint32 BestNodeID = 0;
     for (FCandidateNode& CandidateNode : CandidateNodes)
     {
         auto& UNode = ComponentData->Nodes[CandidateNode.ID];
@@ -371,10 +371,10 @@ TOptional<TTuple<UINT32, Node*>> FUnrealNexusProxy::FindBestNode()
             BestNodeID = CandidateNode.ID;
         }
     }
-    return BestNode == nullptr ? TOptional<TTuple<UINT32, Node*>>() : TTuple<UINT32, Node*>{BestNodeID, BestNode};
+    return BestNode == nullptr ? TOptional<TTuple<uint32, Node*>>() : TTuple<uint32, Node*>{BestNodeID, BestNode};
 }
 
-void FUnrealNexusProxy::RemoveCandidateWithId(const UINT32 NodeID)
+void FUnrealNexusProxy::RemoveCandidateWithId(const uint32 NodeID)
 {
     int NodeIndex = -1;
     for (int i = 0; i < CandidateNodes.Num(); i ++)
@@ -427,7 +427,7 @@ void FUnrealNexusProxy::Update(const FCameraInfo InLastCameraInfo, const FTraver
     }
     
     Node* BestNode = OptionalBestNode.GetValue().Value;
-    const UINT32 BestNodeID = OptionalBestNode.GetValue().Key;
+    const uint32 BestNodeID = OptionalBestNode.GetValue().Key;
 
     // TODO: Pick a better name
     FreeCache(BestNode, BestNodeID);
@@ -512,8 +512,8 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
     
     DECLARE_SCOPE_CYCLE_COUNTER(TEXT("Nexus Edge Selection"), CYCLEID_NexusNodeSelection, STATGROUP_NexusRenderer);
     int RenderedCount = 0;
-    const TSet<UINT32> SelectedNodes = LastTraversalData.SelectedNodes;
-    for (UINT32 Id : SelectedNodes)
+    const TSet<uint32> SelectedNodes = LastTraversalData.SelectedNodes;
+    for (uint32 Id : SelectedNodes)
     {
         if (!LoadedMeshData.Contains(Id))
             continue; // This node was dropped
@@ -524,7 +524,7 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
         auto& NextNode = ComponentData->Nodes[Id + 1];
         
         bool IsVisible = false;
-        const UINT32 NextNodeFirstPatch = NextNode.NexusNode.first_patch;
+        const uint32 NextNodeFirstPatch = NextNode.NexusNode.first_patch;
         for (auto& Patch : CurrentNode.NodePatches)
         {
             const int ChildNode = Patch.node;
@@ -544,10 +544,10 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
 
         int Offset = 0;
         int EndIndex = 0;
-        for (UINT32 PatchId = CurrentNode.NexusNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
+        for (uint32 PatchId = CurrentNode.NexusNode.first_patch; PatchId < NextNodeFirstPatch; PatchId ++)
         {
             const Patch& CurrentNodePatch = CurrentNode.NodePatches[PatchId - CurrentNode.NexusNode.first_patch];
-            const UINT32 ChildNode = CurrentNodePatch.node;
+            const uint32 ChildNode = CurrentNodePatch.node;
             if (!SelectedNodes.Contains(ChildNode))
             {
                 EndIndex = CurrentNodePatch.triangle_offset;
@@ -660,9 +660,9 @@ FPrimitiveViewRelevance FUnrealNexusProxy::GetViewRelevance(const FSceneView* Vi
     return Result;
 }
 
-TArray<UINT32> FUnrealNexusProxy::GetLoadedNodes() const
+TArray<uint32> FUnrealNexusProxy::GetLoadedNodes() const
 {
-    TArray<UINT32> LoadedNodes;
+    TArray<uint32> LoadedNodes;
     LoadedMeshData.GetKeys(LoadedNodes);
     return LoadedNodes;
 }

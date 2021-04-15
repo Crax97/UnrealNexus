@@ -136,7 +136,7 @@ uint32_t UUnrealNexusData::Size(const uint32_t Node)
     return Nodes[Node].NexusNode.getSize();
 }
 
-void UUnrealNexusData::LoadNodeAsync(const UINT32 NodeID, const FStreamableDelegate Callback)
+void UUnrealNexusData::LoadNodeAsync(const uint32 NodeID, const FStreamableDelegate Callback)
 {
 	if (NodeHandles.Contains(NodeID))
 	{
@@ -165,7 +165,7 @@ void UUnrealNexusData::UnloadNode(const int NodeID)
 	NodeHandles.Remove(NodeID);
 }
 
-UUnrealNexusNodeData* UUnrealNexusData::GetNode(const UINT32 NodeId)
+UUnrealNexusNodeData* UUnrealNexusData::GetNode(const uint32 NodeId)
 {
 	const FSoftObjectPath NodePath = Nodes[NodeId].NodeDataPath;
 	if (!NodePath.IsValid())
@@ -236,8 +236,15 @@ void FUnrealNexusNode::Serialize(FArchive& Ar)
 void UUnrealNexusData::SerializeHeader(FArchive& Archive)
 {
 	Archive << Header.version;
-	Archive << Header.nvert;
-	Archive << Header.nface;
+	
+	int64 NVert = *reinterpret_cast<int64*>(&Header.nvert);
+	Archive << NVert;
+	Header.nvert = *reinterpret_cast<uint64*>(&NVert);
+
+	int64 NFace = *reinterpret_cast<int64*>(&Header.nface);
+	Archive << NFace;
+	Header.nvert = *reinterpret_cast<uint64*>(&NFace);
+	
 	SerializeSignature(Archive);
 	Archive << Header.n_nodes;
 	Archive << Header.n_patches;
