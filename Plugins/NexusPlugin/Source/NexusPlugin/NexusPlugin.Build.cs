@@ -8,20 +8,14 @@ public class NexusPlugin : ModuleRules
 {
 
 	private bool LoadNexusLibrary() {
+		
+		var librariesPath = Path.Combine(ModuleDirectory, "libs");
 		if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win64)) {
-			string LibrariesPath = Path.Combine(ModuleDirectory, "libs");
-			PublicAdditionalLibraries.Add(Path.Combine(LibrariesPath, "corto.lib"));
-
-			PublicIncludePaths.AddRange(
-				new string[] {
-				Path.Combine(ModuleDirectory, "nexus", "nxszip"),
-				Path.Combine(ModuleDirectory, "nexus", "common"),
-				Path.Combine(ModuleDirectory, "vcglib"),
-				Path.Combine(ModuleDirectory, "vcglib", "vcg"),
-				Path.Combine(ModuleDirectory, "vcglib", "eigenlib"),
-				Path.Combine(ModuleDirectory, "corto", "include"),
-				}
-			);
+			PublicAdditionalLibraries.Add(Path.Combine(librariesPath, "corto.lib"));
+			return true;
+		} else if (Target.Platform == UnrealTargetPlatform.Linux || Target.Platform == UnrealTargetPlatform.Mac)
+		{			
+			PublicAdditionalLibraries.Add(Path.Combine(librariesPath, "corto.a"));
 			return true;
 		}
 		return false;
@@ -35,6 +29,16 @@ public class NexusPlugin : ModuleRules
         {
 			Console.WriteLine("Nexus is not supported.");
         }
+		PublicIncludePaths.AddRange(
+			new string[] {
+				Path.Combine(ModuleDirectory, "nexus", "nxszip"),
+				Path.Combine(ModuleDirectory, "nexus", "common"),
+				Path.Combine(ModuleDirectory, "vcglib"),
+				Path.Combine(ModuleDirectory, "vcglib", "vcg"),
+				Path.Combine(ModuleDirectory, "vcglib", "eigenlib"),
+				Path.Combine(ModuleDirectory, "corto", "include"),
+			}
+		);
 		PrivateIncludePaths.AddRange(
 			new string[] {
 				// ... add other private include paths required here ...
