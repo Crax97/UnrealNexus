@@ -81,3 +81,6 @@ Plugins\NexusPlugin\Source\NexusPlugin\libs\*
 
 # Unreal Nexus meshes
 Content/NexusMeshes/*
+
+# Unreal Nexus meshes
+Content/TestMaps/*
