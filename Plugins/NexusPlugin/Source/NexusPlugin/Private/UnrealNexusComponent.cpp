@@ -31,7 +31,7 @@ UUnrealNexusComponent::UUnrealNexusComponent(const FObjectInitializer& Initializ
     : UPrimitiveComponent(Initializer)
 {
     PrimaryComponentTick.bCanEverTick = true;
-    PrimaryComponentTick.SetTickFunctionEnable(true);
+    PrimaryComponentTick.SetTickFunctionEnable(false);
     bWantsInitializeComponent = true;
     CurrentCacheSize = 0;
 }
@@ -45,6 +45,15 @@ UUnrealNexusComponent::~UUnrealNexusComponent()
     {
         NexusLoadedAsset->UnloadNode(N);
     }
+}
+
+void UUnrealNexusComponent::BeginPlay()
+{
+    Super::BeginPlay();
+    if(!NexusLoadedAsset || !Proxy) return;
+    Proxy->InitializeThreads();
+    AllocateMemory();
+    PrimaryComponentTick.SetTickFunctionEnable(true);  
 }
 
 void UUnrealNexusComponent::SetErrorForNode(uint32 NodeID, float Error)
@@ -196,7 +205,7 @@ void UUnrealNexusComponent::UpdateCameraView()
     CameraInfo.CurrentResolution = ResolutionThisFrame;
 }
 
-void UUnrealNexusComponent::InitializeComponent()
+void UUnrealNexusComponent::AllocateMemory()
 {
     if(!NexusLoadedAsset) return;
     CalculatedErrors.Reserve(NexusLoadedAsset->Nodes.Num());
@@ -206,16 +215,6 @@ void UUnrealNexusComponent::InitializeComponent()
     Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), ComponentBoundsRadius * 10.0f));
 }
 
-void UUnrealNexusComponent::BeginPlay()
-{
-    Super::BeginPlay();
-    if (bWasInit) return;
-    if(!NexusLoadedAsset || !Proxy) return;
-    Proxy->InitializeThreads();
-    InitializeComponent();
-    bWasInit = true;
-    
-}
 
 bool UUnrealNexusComponent::IsNodeLoaded(const uint32 NodeID) const
 {

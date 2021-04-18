@@ -67,7 +67,6 @@ private:
     int CurrentlyBlockedNodes = 0;
     int CurrentDrawBudget = 0;
     float CurrentError = 0.0f;
-    bool bWasInit = false;
     bool bIsTraversalEnabled = true;
     bool bIsFrustumCullingEnabled = true;
 
@@ -85,7 +84,7 @@ private:
     float CalculateErrorForNode(const uint32 NodeID, bool UseTight) const;
     void UpdateRemainingErrors(TArray<float>& InstanceErrors);
     void UpdateCameraView();
-    void InitializeComponent();
+    void AllocateMemory();
     virtual void BeginPlay() override;
 protected:
     class FUnrealNexusProxy* Proxy = nullptr;
