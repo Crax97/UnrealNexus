@@ -414,6 +414,8 @@ void FUnrealNexusProxy::BeginFrame(float DeltaSeconds)
 void FUnrealNexusProxy::Update(const FCameraInfo InLastCameraInfo, const FTraversalData InLastTraversalData)
 {
     DECLARE_SCOPE_CYCLE_COUNTER(TEXT("Nexus Proxy Update"), CYCLEID_NexusRenderer, STATGROUP_NexusRenderer);
+
+    if(!JobExecutor) return;
     LastCameraInfo = InLastCameraInfo;
     LastTraversalData = InLastTraversalData;
     if (this->PendingCount >= this->MaxPending)
@@ -464,6 +466,8 @@ FUnrealNexusProxy::~FUnrealNexusProxy()
         JobThread->Kill();
         delete JobExecutor;
         delete JobThread;
+        JobExecutor = nullptr;
+        JobThread = nullptr;
     }
     
 }
