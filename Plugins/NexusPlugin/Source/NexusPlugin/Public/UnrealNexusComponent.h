@@ -85,6 +85,7 @@ private:
     void UpdateRemainingErrors(TArray<float>& InstanceErrors);
     void UpdateCameraView();
     void AllocateMemory();
+    virtual void OnRegister() override;
     virtual void BeginPlay() override;
 protected:
     class FUnrealNexusProxy* Proxy = nullptr;
@@ -99,6 +100,7 @@ protected:
     bool CanNodeBeExpanded(Node* Node, int NodeID, float NodeError, float CurrentProxyError) const;
     void AddNodeToTraversal(FTraversalData& TraversalData, const uint32 NewNodeId);
     void AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked);
+
     
     virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 public:

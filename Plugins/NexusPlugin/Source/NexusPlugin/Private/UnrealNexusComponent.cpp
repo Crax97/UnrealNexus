@@ -50,10 +50,7 @@ UUnrealNexusComponent::~UUnrealNexusComponent()
 void UUnrealNexusComponent::BeginPlay()
 {
     Super::BeginPlay();
-    if(!NexusLoadedAsset || !Proxy) return;
     Proxy->InitializeThreads();
-    AllocateMemory();
-    PrimaryComponentTick.SetTickFunctionEnable(true);  
 }
 
 void UUnrealNexusComponent::SetErrorForNode(uint32 NodeID, float Error)
@@ -215,6 +212,12 @@ void UUnrealNexusComponent::AllocateMemory()
     Bounds = FBoxSphereBounds(FSphere(GetComponentLocation(), ComponentBoundsRadius * 10.0f));
 }
 
+void UUnrealNexusComponent::OnRegister()
+{
+    Super::OnRegister();
+    AllocateMemory();
+    PrimaryComponentTick.SetTickFunctionEnable(true);  
+}
 
 bool UUnrealNexusComponent::IsNodeLoaded(const uint32 NodeID) const
 {
