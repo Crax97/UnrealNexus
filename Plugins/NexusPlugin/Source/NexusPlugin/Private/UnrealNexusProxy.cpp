@@ -332,17 +332,6 @@ void FUnrealNexusProxy::FreeCache(Node* BestNode, const uint64 BestNodeID)
 
 }
 
-void FUnrealNexusProxy::InitializeThreads()
-{
-    
-    if (Component->IsNodeLoaded(0))
-    {
-        LoadGPUData(0);
-    }
-    JobExecutor = new FNexusJobExecutorThread(nullptr);
-    JobThread = FRunnableThread::Create(JobExecutor, TEXT("Nexus Node Loader"));
-}
-
 void FUnrealNexusProxy::Flush()
 {
 #if 0
@@ -415,7 +404,6 @@ void FUnrealNexusProxy::Update(const FCameraInfo InLastCameraInfo, const FTraver
 {
     DECLARE_SCOPE_CYCLE_COUNTER(TEXT("Nexus Proxy Update"), CYCLEID_NexusRenderer, STATGROUP_NexusRenderer);
 
-    if(!JobExecutor) return;
     LastCameraInfo = InLastCameraInfo;
     LastTraversalData = InLastTraversalData;
     if (this->PendingCount >= this->MaxPending)
@@ -436,40 +424,11 @@ void FUnrealNexusProxy::Update(const FCameraInfo InLastCameraInfo, const FTraver
     
     RemoveCandidateWithId(BestNodeID);
     Component->SetNodeStatus(BestNodeID, ENodeStatus::Pending);
-    ComponentData->LoadNodeAsync(BestNodeID, FStreamableDelegate::CreateLambda([&, BestNodeID]()
-    {
-        // Two passes: 1) Load the Unreal node data
-        if (LoadedMeshData.Contains(BestNodeID)) return;
-        const auto UCurrentNodeData = ComponentData->GetNode(BestNodeID);
-        auto* UCurrentNode = &ComponentData->Nodes[BestNodeID];
-
-        // 2) Decode it in a separate thread
-        JobExecutor->AddNewJobs( {FNexusJob { BestNodeID, UCurrentNodeData, UCurrentNode, ComponentData}});
-    }));
-
-    
-    FNexusJob DoneJob;
-    TQueue<FNexusJob>& FinishedJobs = JobExecutor->GetJobsDone();
-    while (FinishedJobs.Dequeue(DoneJob))
-    {
-        Component->SetNodeStatus(DoneJob.NodeIndex, ENodeStatus::Loaded);
-        LoadGPUData(DoneJob.NodeIndex);
-    }
+    Component->RequestNode(BestNodeID);
 }
 
 FUnrealNexusProxy::~FUnrealNexusProxy()
 {
-    // Kill the Job thread
-    if (JobExecutor)
-    {
-        JobExecutor->Stop();
-        JobThread->Kill();
-        delete JobExecutor;
-        delete JobThread;
-        JobExecutor = nullptr;
-        JobThread = nullptr;
-    }
-    
 }
 
 void FUnrealNexusProxy::LoadGPUData(const uint32 N)

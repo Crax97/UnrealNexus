@@ -7,6 +7,7 @@
 #include "Engine/LocalPlayer.h"
 #include "DrawDebugHelpers.h"
 #include "NexusCommons.h"
+#include "NexusJobExecutorThread.h"
 using namespace NexusCommons;
 
 constexpr bool GBCheckInvariants = false;
@@ -50,7 +51,32 @@ UUnrealNexusComponent::~UUnrealNexusComponent()
 void UUnrealNexusComponent::BeginPlay()
 {
     Super::BeginPlay();
-    Proxy->InitializeThreads();
+    CreateThreads();
+}
+
+
+void UUnrealNexusComponent::BeginDestroy()
+{
+    Super::BeginDestroy();
+    DeleteThreads();
+}
+
+void UUnrealNexusComponent::DeleteThreads()
+{
+    if (!JobThread) return;
+    JobThread->Kill();
+    JobExecutor->Stop();
+    JobExecutor->Exit();
+    delete JobThread;
+    delete JobExecutor;
+
+    JobThread = nullptr;
+    JobExecutor = nullptr;
+}
+void UUnrealNexusComponent::CreateThreads()
+{
+    JobExecutor = new FNexusJobExecutorThread(nullptr);
+    JobThread = FRunnableThread::Create(JobExecutor, TEXT("Nexus Node Loader"));
 }
 
 void UUnrealNexusComponent::SetErrorForNode(uint32 NodeID, float Error)
@@ -219,6 +245,7 @@ void UUnrealNexusComponent::OnRegister()
     PrimaryComponentTick.SetTickFunctionEnable(true);  
 }
 
+
 bool UUnrealNexusComponent::IsNodeLoaded(const uint32 NodeID) const
 {
     return NodeStatuses.Contains(NodeID) && NodeStatuses[NodeID] == ENodeStatus::Loaded;
@@ -373,6 +400,15 @@ void UUnrealNexusComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     UpdateCameraView();
     const FTraversalData LastTraversalData = DoTraversal();
     Proxy->Update(CameraInfo, LastTraversalData);
+    
+    
+    FNexusJob DoneJob;
+    TQueue<FNexusJob>& FinishedJobs = JobExecutor->GetJobsDone();
+    while (FinishedJobs.Dequeue(DoneJob))
+    {
+        SetNodeStatus(DoneJob.NodeIndex, ENodeStatus::Loaded);
+        Proxy->LoadGPUData(DoneJob.NodeIndex);
+    }
 }
 
 uint64 UUnrealNexusComponent::GetNodeSize(const uint32 NodeID) const
@@ -386,4 +422,18 @@ void UUnrealNexusComponent::UnloadNode(uint32 UnloadedNodeID)
 {
     NexusLoadedAsset->UnloadNode(UnloadedNodeID);
     SetNodeStatus(UnloadedNodeID, ENodeStatus::Dropped);
+}
+
+void UUnrealNexusComponent::RequestNode(const uint32 BestNodeID)
+{
+    NexusLoadedAsset->LoadNodeAsync(BestNodeID, FStreamableDelegate::CreateLambda([&, BestNodeID]()
+    {
+        // Two passes: 1) Load the Unreal node data
+        if (IsNodeLoaded(BestNodeID)) return;
+        const auto UCurrentNodeData = NexusLoadedAsset->GetNode(BestNodeID);
+        auto* UCurrentNode = &NexusLoadedAsset->Nodes[BestNodeID];
+
+        // 2) Decode it in a separate thread
+        JobExecutor->AddNewJobs( {FNexusJob { BestNodeID, UCurrentNodeData, UCurrentNode, NexusLoadedAsset}});
+    }));
 }

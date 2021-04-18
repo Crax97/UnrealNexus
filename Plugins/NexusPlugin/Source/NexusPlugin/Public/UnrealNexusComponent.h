@@ -69,6 +69,9 @@ private:
     float CurrentError = 0.0f;
     bool bIsTraversalEnabled = true;
     bool bIsFrustumCullingEnabled = true;
+    
+    class FRunnableThread* JobThread = nullptr;
+    class FNexusJobExecutorThread* JobExecutor = nullptr;
 
     // TODO: Load first node and calculate Radius based on that
     float ComponentBoundsRadius = 1000.0f;
@@ -86,7 +89,10 @@ private:
     void UpdateCameraView();
     void AllocateMemory();
     virtual void OnRegister() override;
+    void CreateThreads();
     virtual void BeginPlay() override;
+    void DeleteThreads();
+    virtual void BeginDestroy() override;
 protected:
     class FUnrealNexusProxy* Proxy = nullptr;
     TMap<uint32, ENodeStatus> NodeStatuses;
@@ -111,6 +117,7 @@ public:
         FActorComponentTickFunction* ThisTickFunction) override;
     uint64 GetNodeSize(const uint32 NodeID) const;
     void UnloadNode(uint32 UnloadedNodeID);
+    void RequestNode(const uint32 BestNodeID);
 
     // https://docs.unrealengine.com/en-US/ProgrammingAndScripting/ProgrammingWithCPP/Assets/AsyncLoading/index.html
     // A TSoftObjectPtr is basically a TWeakObjectPtr that wraps around a FSoftObjectPath,
