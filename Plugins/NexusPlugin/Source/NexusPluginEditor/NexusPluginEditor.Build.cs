@@ -10,7 +10,7 @@ public class NexusPluginEditor : ModuleRules
 	private bool LoadNexusLibrary() {
 		if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win64)) {
 			string LibrariesPath = Path.Combine(ModuleDirectory, "libs");
-			PublicAdditionalLibraries.Add(Path.Combine(LibrariesPath, "corto.lib"));
+			PublicAdditionalLibraries.Add(Path.Combine(LibrariesPath, "libcorto.lib"));
 
 			PublicIncludePaths.AddRange(
 				new string[] {

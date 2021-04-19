@@ -15,7 +15,7 @@ public class NexusPlugin : ModuleRules
 			return true;
 		} else if (Target.Platform == UnrealTargetPlatform.Linux || Target.Platform == UnrealTargetPlatform.Mac)
 		{			
-			PublicAdditionalLibraries.Add(Path.Combine(librariesPath, "corto.a"));
+			PublicAdditionalLibraries.Add(Path.Combine(librariesPath, "libcorto.a"));
 			return true;
 		}
 		return false;
