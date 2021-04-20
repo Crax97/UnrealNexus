@@ -187,14 +187,14 @@ void UUnrealNexusData::LoadTextureForNode(const uint32 NodeID, FStreamableDelega
 	}
 }
 
-UTexture2D* UUnrealNexusData::GetTexture(const uint32 TextureID)
+UTexture* UUnrealNexusData::GetTexture(const uint32 TextureID)
 {
 	const FSoftObjectPath TexturePath = NodeTexturesPaths[TextureID];
 	if (!TexturePath.IsValid())
 	{
-		return Cast<UTexture2D>(GetStreamableManager().LoadSynchronous(TexturePath));
+		return Cast<UTexture>(GetStreamableManager().LoadSynchronous(TexturePath));
 	}
-	return Cast<UTexture2D>(TexturePath.ResolveObject());
+	return Cast<UTexture>(TexturePath.ResolveObject());
 }
 
 void UUnrealNexusData::UnloadTexture(const int NodeID)

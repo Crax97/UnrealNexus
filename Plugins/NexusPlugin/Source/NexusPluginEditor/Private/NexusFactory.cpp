@@ -108,7 +108,7 @@ UTexture2D* CreateTexture2DFromData(FName Name, UPackage* Outer, int Width, int 
     Name,
     RF_Public | RF_Standalone
     );
-
+    
     NewTexture->PlatformData = new FTexturePlatformData();
     NewTexture->PlatformData->SizeX = Width;
     NewTexture->PlatformData->SizeY = Height;

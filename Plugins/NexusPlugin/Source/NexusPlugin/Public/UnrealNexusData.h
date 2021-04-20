@@ -60,7 +60,7 @@ public:
     void LoadNodeAsync(const uint32 NodeID, FStreamableDelegate Callback);
     void UnloadNode(const int NodeID);
     void LoadTextureForNode(const uint32 NodeID, FStreamableDelegate Callback);
-    UTexture2D* GetTexture(const uint32 TextureID);
+    UTexture* GetTexture(const uint32 TextureID);
     void UnloadTexture(const int NodeID);
     
     class UUnrealNexusNodeData* GetNode(uint32 NodeId);
