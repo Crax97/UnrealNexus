@@ -44,19 +44,24 @@ public:
     TArray<FUnrealNexusNode> Nodes;
 
     UPROPERTY()
-    TArray<UTexture2D*> NodeTextures;
-
+    TArray<FSoftObjectPath> NodeTexturesPaths;
     
     UPROPERTY()
     int RootsCount;
-    
+
     TMap<uint32, TSharedPtr<FStreamableHandle>> NodeHandles;
+    TMap<uint32, TSharedPtr<FStreamableHandle>> NodeTexturesHandles;
+
+
 
     vcg::Sphere3f &BoundingSphere();
     bool Intersects(vcg::Ray3f &Ray, float &Distance);
     uint32_t Size(uint32_t Node);
     void LoadNodeAsync(const uint32 NodeID, FStreamableDelegate Callback);
     void UnloadNode(const int NodeID);
+    void LoadTextureForNode(const uint32 NodeID, FStreamableDelegate Callback);
+    UTexture2D* GetTexture(const uint32 TextureID);
+    void UnloadTexture(const int NodeID);
     
     class UUnrealNexusNodeData* GetNode(uint32 NodeId);
 

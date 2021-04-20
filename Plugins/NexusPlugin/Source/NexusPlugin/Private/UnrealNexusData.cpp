@@ -165,6 +165,45 @@ void UUnrealNexusData::UnloadNode(const int NodeID)
 	NodeHandles.Remove(NodeID);
 }
 
+void UUnrealNexusData::LoadTextureForNode(const uint32 NodeID, FStreamableDelegate Callback)
+{
+	if (NodeHandles.Contains(NodeID))
+	{
+		auto& Handle = NodeHandles[NodeID];
+		if (Handle->HasLoadCompleted())
+		{
+			if(!Callback.ExecuteIfBound()) {
+				// Log this
+			}
+		}
+	} else
+	{
+		const FSoftObjectPath NodePath = NodeTexturesPaths[NodeID];
+		check(NodePath.IsValid());
+		AsyncTask(ENamedThreads::GameThread, [NodePath, Callback, NodeID, this]() {
+			const auto Handle = GetStreamableManager().RequestAsyncLoad({NodePath}, Callback);
+			NodeTexturesHandles.Add(NodeID, Handle);
+		});
+	}
+}
+
+UTexture2D* UUnrealNexusData::GetTexture(const uint32 TextureID)
+{
+	const FSoftObjectPath TexturePath = NodeTexturesPaths[TextureID];
+	if (!TexturePath.IsValid())
+	{
+		return Cast<UTexture2D>(GetStreamableManager().LoadSynchronous(TexturePath));
+	}
+	return Cast<UTexture2D>(TexturePath.ResolveObject());
+}
+
+void UUnrealNexusData::UnloadTexture(const int NodeID)
+{
+	const FSoftObjectPath NodePath = NodeTexturesPaths[NodeID];
+	check(NodePath.IsValid());
+	GetStreamableManager().Unload(NodePath);
+}
+
 UUnrealNexusNodeData* UUnrealNexusData::GetNode(const uint32 NodeId)
 {
 	const FSoftObjectPath NodePath = Nodes[NodeId].NodeDataPath;
@@ -312,21 +351,21 @@ void UUnrealNexusData::SerializeNodes(FArchive& Archive)
 
 void UUnrealNexusData::SerializeTextures(FArchive& Archive)
 {
-	int TextureNum = NodeTextures.Num();
+	int TextureNum = NodeTexturesPaths.Num();
 	Archive << TextureNum;
-	if (TextureNum == NodeTextures.Num())
+	if (TextureNum == NodeTexturesPaths.Num())
 	{
-		for (auto& Texture : NodeTextures)
+		for (auto& TexturePath : NodeTexturesPaths)
 		{
-			Archive << Texture;
+			Archive << TexturePath;
 		}
 	} else
 	{
 		for (int i = 0; i < TextureNum; i ++)
 		{
-			UTexture2D* Texture;
-			Archive << Texture;
-			NodeTextures.Push(Texture);
+			FSoftObjectPath TexturePath;
+			Archive << TexturePath;
+			NodeTexturesPaths.Push(TexturePath);
 		}
 	}
 	

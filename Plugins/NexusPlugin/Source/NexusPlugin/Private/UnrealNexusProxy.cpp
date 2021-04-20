@@ -26,11 +26,12 @@ FVertexBufferRHIRef CreateBufferAndFillWithData(const T* Data, const SIZE_T Size
     return Buffer;
 }
 
-FNexusNodeRenderData::FNexusNodeRenderData(const FUnrealNexusProxy* Proxy, NodeData& Data, Node& Node)
-    : NodeVertexFactory(Proxy->GetScene().GetFeatureLevel(), "NexusNodeVertexFactory")
+FNexusNodeRenderData::FNexusNodeRenderData(const FUnrealNexusProxy* Proxy, NodeData& Data, Node& Node, UMaterialInstanceDynamic* InInstancedMaterial)
+    : NodeVertexFactory(Proxy->GetScene().GetFeatureLevel(), "NexusNodeVertexFactory"),
+        InstancedMaterial(InInstancedMaterial)
 {
     check(IsInRenderingThread());
-
+    
     Signature& TheSig = Proxy->ComponentData->Header.signature;
     NumPrimitives = Node.nface;
     CreatePositionBuffer(Node, Data);
@@ -438,11 +439,17 @@ void FUnrealNexusProxy::LoadGPUData(const uint32 N)
     auto* TheNodeData = ComponentData->GetNode(N);
     NodeData& TheData = TheNodeData->NexusNodeData;
     check(TheNodeData->NexusNodeData.memory);
+    UMaterialInstanceDynamic* MaterialInstance = nullptr;
+    if (ComponentData->Header.signature.vertex.hasTextures() && Component->ModelMaterial != nullptr)
+    {
+        MaterialInstance = UMaterialInstanceDynamic::Create(Component->ModelMaterial, nullptr);
+        Component->NotifyNewMaterial(MaterialInstance);
+    }
     Component->CurrentCacheSize += Component->GetNodeSize(N);
     
-    ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N](FRHICommandListImmediate& Commands)
+    ENQUEUE_RENDER_COMMAND(NexusLoadGPUData)([&, N, MaterialInstance](FRHICommandListImmediate& Commands)
     {
-        FNexusNodeRenderData* Data = new FNexusNodeRenderData(this, TheData, TheNode);
+        FNexusNodeRenderData* Data = new FNexusNodeRenderData(this, TheData, TheNode, MaterialInstance);
         this->PendingCount ++;
         UE_LOG(NexusInfo, Log, TEXT("Increase cache %d by %d"), Component->CurrentCacheSize, Component->GetNodeSize(N));
         Data->NumPrimitives = TheNode.nface;
@@ -543,7 +550,22 @@ void FUnrealNexusProxy::DrawEdgeNodes(const int ViewIndex, const FSceneView* Vie
                     Mesh.bWireframe = true;
                     Mesh.bCanApplyViewModeOverrides = false;
                 }
-                else
+                else if (Data->InstancedMaterial != nullptr)
+                {
+                    if (Data->CurrentSetTextureID != CurrentNodePatch.texture)
+                    {
+                        uint32 TextureID = CurrentNodePatch.texture; 
+                        ComponentData->LoadTextureForNode(CurrentNodePatch.texture, FStreamableDelegate::CreateLambda([TextureID, Data, this]()
+                        {
+                            auto* Texture = ComponentData->GetTexture(TextureID);
+                            Data->InstancedMaterial->SetTextureParameterValue(TEXT("InputTexture"), Texture);
+                        }));
+                        
+                        Data->CurrentSetTextureID = CurrentNodePatch.texture;
+                    }
+                    
+                    Mesh.MaterialRenderProxy = Data->InstancedMaterial->GetRenderProxy();
+                } else
                 {
                     Mesh.MaterialRenderProxy = MaterialProxy;
                 }

@@ -84,3 +84,29 @@ Content/NexusMeshes/*
 
 # Unreal Nexus meshes
 Content/TestMaps/*
+Content/Materials/Tv.uasset
+Content/Materials/tv_u1_v1.uasset
+Content/Materials/VolterraMaterial.uasset
+Content/Meshes/nettuno_2.uasset
+Content/MeshVisualizer.uasset
+Content/NexusExampleComponent.uasset
+Content/TestMaps/David8M.umap
+Content/TestMaps/Grifone21M.umap
+Content/TestMaps/Nettuno5M.umap
+Content/TestMaps/Pieta51M.umap
+Content/TestMaps/Skull100k.umap
+Content/TestPawn.uasset
+Content/Volterra.umap
+Content/WireframeMaterial.uasset
+Source/UnrealNexus.Target.cs
+Source/UnrealNexus/UnrealNexus.Build.cs
+Source/UnrealNexus/UnrealNexus.cpp
+Source/UnrealNexus/UnrealNexus.h
+Source/UnrealNexusEditor.Target.cs
+Source/UnrealVolterra.Target.cs
+Source/UnrealVolterra/UnrealVolterra.Build.cs
+Source/UnrealVolterra/UnrealVolterra.cpp
+Source/UnrealVolterra/UnrealVolterra.h
+Source/UnrealVolterraEditor.Target.cs
+UnrealNexus.uproject
+UnrealVolterra.uproject

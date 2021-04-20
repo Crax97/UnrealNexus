@@ -12,11 +12,14 @@ public:
     FVertexBufferWithSRV TangentBuffer;
     FIndexBuffer IndexBuffer;
 
+    UMaterialInstanceDynamic* InstancedMaterial = nullptr;
+
     bool bHasColors = false;
     
     int NumPrimitives;
+    uint32_t CurrentSetTextureID = UINT32_MAX;
 
-    FNexusNodeRenderData(const FUnrealNexusProxy* Proxy, NodeData& Data, Node& Node);
+    FNexusNodeRenderData(const FUnrealNexusProxy* Proxy, NodeData& Data, Node& Node, UMaterialInstanceDynamic* InInstancedMaterial = nullptr);
     void CreatePositionBuffer(nx::Node& Node, nx::NodeData& Data);
     void InitColorBuffer(const FUnrealNexusProxy* Proxy, Signature& TheSig, NodeData& Data, Node& Node);
     void CreateIndexBuffer(Signature& Sig, Node& Node, nx::NodeData& Data);

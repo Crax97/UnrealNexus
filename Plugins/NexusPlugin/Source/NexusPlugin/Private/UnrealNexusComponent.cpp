@@ -143,10 +143,15 @@ void UUnrealNexusComponent::ToggleFrustumCulling(bool NewFrustumCullingState)
 
 void UUnrealNexusComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials) const
 {
+    for (auto& DynamicMaterial : DynamicMaterials)
+    {
+        OutMaterials.Push(DynamicMaterial);
+    }
     if (ModelMaterial != nullptr)
     {
         OutMaterials.Add(ModelMaterial);
     }
+
 }
 
 FPrimitiveSceneProxy* UUnrealNexusComponent::CreateSceneProxy()
@@ -351,6 +356,16 @@ void UUnrealNexusComponent::AddNodeChildren(const FTraversalElement& CurrentElem
             AddNodeToTraversal(TraversalData, PatchNodeId);
         }
     }
+}
+
+void UUnrealNexusComponent::NotifyNewMaterial(UMaterialInterface* DynamicMaterial)
+{
+    DynamicMaterials.Push(DynamicMaterial);
+}
+
+void UUnrealNexusComponent::NotifyMaterialDeleted(UMaterialInterface* DynamicMaterial)
+{
+    DynamicMaterials.Remove(DynamicMaterial);
 }
 
 void UUnrealNexusComponent::AddNodeToTraversal(FTraversalData& TraversalData, const uint32 NewNodeId)

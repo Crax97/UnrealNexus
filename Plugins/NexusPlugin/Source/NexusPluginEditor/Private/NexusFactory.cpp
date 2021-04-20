@@ -212,13 +212,13 @@ void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer, const uint8
         Textures.Emplace(ReadTexture(Buffer));
     }
 
-    Data->NodeTextures.SetNum(Textures.Num());
+    Data->NodeTexturesPaths.SetNum(Textures.Num());
     for (int i = 0; i < Textures.Num() - 1; i ++)
     {
         Texture& This = Textures[i];
         Texture& Next = Textures[i + 1];
         const auto TextureSize = Next.offset - This.offset;
-        Data->NodeTextures[i] = ReadTextureFromBuffer(Data, FileBegin, This.offset, TextureSize, i);
+        Data->NodeTexturesPaths[i] = ReadTextureFromBuffer(Data, FileBegin, This.offset, TextureSize, i);
     }
 
     //find number of roots:

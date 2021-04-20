@@ -82,6 +82,9 @@ private:
     const float Outer_Node_Factor = 100.0f;
     TArray<float> CalculatedErrors;
     uint64 CurrentCacheSize;
+    
+    UPROPERTY()
+    TArray<UMaterialInterface*> DynamicMaterials;
 
     float CalculateDistanceFromSphereToViewFrustum(const vcg::Sphere3f& Sphere3, const float SphereTightRadius) const;
     float CalculateErrorForNode(const uint32 NodeID, bool UseTight) const;
@@ -107,6 +110,8 @@ protected:
     void AddNodeToTraversal(FTraversalData& TraversalData, const uint32 NewNodeId);
     void AddNodeChildren(const FTraversalElement& CurrentElement, FTraversalData& TraversalData, bool ShouldMarkBlocked);
 
+    void NotifyNewMaterial(UMaterialInterface* DynamicMaterial);
+    void NotifyMaterialDeleted(UMaterialInterface* DynamicMaterial);
     
     virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 public:
