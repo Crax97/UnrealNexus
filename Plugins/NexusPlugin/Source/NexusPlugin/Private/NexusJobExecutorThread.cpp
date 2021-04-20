@@ -29,6 +29,11 @@ uint32 FNexusJobExecutorThread::Run()
             auto& Node = Job.Node;
             auto& Data = Job.NodeData;
             Data->DecodeData(Job.Data->Header, Node->NexusNode.nvert, Node->NexusNode.nface);
+            
+            if (Job.Data->Header.signature.face.hasTextures())
+            {
+                // TODO Decode texture
+            }
             JobsDone.Enqueue(Job);
         }
 #ifdef NEXUS_RUNNING_QUEUE_TESTS

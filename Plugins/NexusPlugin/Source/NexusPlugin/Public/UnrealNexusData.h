@@ -29,9 +29,10 @@ class NEXUSPLUGIN_API UUnrealNexusData final : public UObject
     static void SerializeVertexAttributes(FArchive& Archive, VertexElement& Vertex);
     static void SerializeFaceAttributes(FArchive& Archive, FaceElement& Face);
     static void SerializeSphere(FArchive& Archive, vcg::Sphere3f& Sphere);
+    void SerializeTextures(FArchive& Archive);    
+
     void SerializeNodes(FArchive& Archive);
-    // void SerializePatches(FArchive& Archive) const;
-    void SerializeTextures(FArchive& Archive) const;
+
     
 public:
     UUnrealNexusData();
@@ -41,6 +42,10 @@ public:
 
     UPROPERTY()
     TArray<FUnrealNexusNode> Nodes;
+
+    UPROPERTY()
+    TArray<UTexture2D*> NodeTextures;
+
     
     UPROPERTY()
     int RootsCount;

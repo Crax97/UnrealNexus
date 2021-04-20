@@ -6,7 +6,7 @@
 void UUnrealNexusNodeData::DecodeData(Header& Header, const int VertsCount, const int FacesCount)
 {
     if (DidDecodeData) return;
-    LoadUtils::LoadNodeData(Header, VertsCount, FacesCount, NexusNodeData, NodeSize);
+    LoadUtils::LoadNodeData(Header, VertsCount, FacesCount, NexusNodeData, NodeSize, UncompressedTexture);
     DidDecodeData = true;
 }
 

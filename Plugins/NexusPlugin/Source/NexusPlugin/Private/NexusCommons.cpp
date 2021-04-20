@@ -21,7 +21,7 @@ FStreamableManager& NexusCommons::GetStreamableManager()
 }
 
 
-void LoadUtils::LoadNodeData(nx::Header& Header, int VertCount, int FacesCount, nx::NodeData& TheNodeData, const uint64 DataSizeOnDisk)
+void LoadUtils::LoadNodeData(nx::Header& Header, int VertCount, int FacesCount, nx::NodeData& TheNodeData, const uint64 DataSizeOnDisk, UTexture2D*& OutputTexture)
 {
 	nx::Signature& Signature = Header.signature;
 	if (!Signature.isCompressed())
@@ -94,26 +94,4 @@ void LoadUtils::LoadNodeData(nx::Header& Header, int VertCount, int FacesCount, 
 			FMemory::Memcpy(c, Colors.GetData(), sizeof(vcg::Color4b) * VertCount);
 		}
 	}
-
-#if 0
-	if(Header.n_textures) {
-		//be sure to load images
-		for(uint32_t p = TheNode.first_patch; p < Node.last_patch(); p++) {
-			uint32_t t = patches[p].texture;
-			if(t == 0xffffffff) continue;
-
-			TextureData &TexData = texturedata[t];
-			TexData.count_ram++;
-			if(TexData.count_ram > 1)
-				continue;
-
-			Texture &Tex = textures[t];
-			TexData.memory = static_cast<char*>(file->map(Tex.getBeginOffset(), Tex.getSize()));
-			checkf(TexData.memory, TEXT("Failed mapping texture data"));
-
-			loadImageFromData(TexData, t);
-		}
-	}
-#endif
-    
 }

@@ -19,5 +19,5 @@ namespace NexusCommons
 
 namespace LoadUtils
 {
-    void LoadNodeData(nx::Header& Header, int VertCount, int FacesCount, nx::NodeData& TheNodeData, const uint64 DataSizeOnDisk);
+    void LoadNodeData(nx::Header& Header, int VertCount, int FacesCount, nx::NodeData& TheNodeData, const uint64 DataSizeOnDisk, UTexture2D*& OutputTexture);
 }

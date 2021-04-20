@@ -12,6 +12,9 @@ class NEXUSPLUGIN_API UUnrealNexusNodeData final : public UObject
 private:
     bool DidDecodeData = false;
     
+    UPROPERTY()
+    UTexture2D* UncompressedTexture = nullptr;
+    
 public:
     nx::NodeData NexusNodeData;
     uint32 NodeSize = 0;

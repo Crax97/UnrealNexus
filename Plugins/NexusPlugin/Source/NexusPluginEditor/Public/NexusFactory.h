@@ -2,6 +2,10 @@
 
 #include "NexusFactory.generated.h"
 
+namespace nx {
+    struct Texture;
+}
+
 class UUnrealNexusData;
 
 UCLASS(MinimalAPI, hidecategories=Object)

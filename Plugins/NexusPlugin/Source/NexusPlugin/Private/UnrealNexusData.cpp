@@ -310,19 +310,26 @@ void UUnrealNexusData::SerializeNodes(FArchive& Archive)
 	}
 }
 
-void UUnrealNexusData::SerializeTextures(FArchive& Archive) const
+void UUnrealNexusData::SerializeTextures(FArchive& Archive)
 {
-	/*
-	for (uint32 i = 0; i < Header.n_textures; i ++)
+	int TextureNum = NodeTextures.Num();
+	Archive << TextureNum;
+	if (TextureNum == NodeTextures.Num())
 	{
-		auto& Texture = Textures[i];
-		Archive << Texture.offset;
-		for (int Mij = 0; Mij < 16; Mij ++)
+		for (auto& Texture : NodeTextures)
 		{
-			Archive << Texture.matrix[Mij];
+			Archive << Texture;
+		}
+	} else
+	{
+		for (int i = 0; i < TextureNum; i ++)
+		{
+			UTexture2D* Texture;
+			Archive << Texture;
+			NodeTextures.Push(Texture);
 		}
 	}
-	*/
+	
 }
 
 UUnrealNexusData::UUnrealNexusData() {}

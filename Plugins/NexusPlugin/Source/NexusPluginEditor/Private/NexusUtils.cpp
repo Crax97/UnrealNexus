@@ -47,7 +47,7 @@ nx::Texture DataUtils::ReadTexture(uint8*& Buffer)
 {
     using namespace Utils;
     nx::Texture Tex;
-    Tex.offset = Read32(Buffer);
+    Tex.offset = Read32(Buffer) * NEXUS_PADDING;
     for (int i = 0; i < 16; i ++)
     {
         Tex.matrix[i] = ReadFloat(Buffer);

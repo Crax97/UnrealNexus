@@ -135,7 +135,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int DrawBudget = 1024 * 1024 * 1024 * 1; // 1 GB
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0", ClampMax="30"))
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0", ClampMax="50"))
     float TargetError = 2.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, META=(ClampMin="0", ClampMax="30"))

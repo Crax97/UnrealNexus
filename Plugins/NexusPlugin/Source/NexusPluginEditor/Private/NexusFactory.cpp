@@ -1,9 +1,13 @@
 ﻿#include "NexusFactory.h"
 
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
 #include "UnrealNexusData.h"
 #include "UnrealNexusNodeData.h"
 #include "NexusUtils.h"
-#include "NodeDataFactory.h"
+#include "NodeDataFactory.h"	
+#include "Engine/Texture2D.h"
+#include "Factories/Texture2dFactoryNew.h"
 
 DEFINE_LOG_CATEGORY(NexusEditorInfo)
 DEFINE_LOG_CATEGORY(NexusEditorErrors)
@@ -96,6 +100,58 @@ bool UNexusFactory::ReadDataIntoNexusFile(UUnrealNexusData* UnrealNexusData, uin
     return ParseHeader(UnrealNexusData, Buffer, BufferEnd);
 }
 
+UTexture2D* CreateTexture2DFromData(FName Name, UPackage* Outer, int Width, int Height, EPixelFormat InFormat, uint8* InData)
+{
+    // Copied from UTexture2D::CreateTransient()
+    UTexture2D* NewTexture = NewObject<UTexture2D>(
+    Outer,
+    Name,
+    RF_Public | RF_Standalone
+    );
+
+    NewTexture->PlatformData = new FTexturePlatformData();
+    NewTexture->PlatformData->SizeX = Width;
+    NewTexture->PlatformData->SizeY = Height;
+    NewTexture->PlatformData->PixelFormat = InFormat;
+
+    // Allocate first mipmap.
+    const int32 NumBlocksX = Width / GPixelFormats[InFormat].BlockSizeX;
+    const int32 NumBlocksY = Height / GPixelFormats[InFormat].BlockSizeY;
+    FTexture2DMipMap* Mip = new FTexture2DMipMap();
+    NewTexture->PlatformData->Mips.Add(Mip);
+    Mip->SizeX = Width;
+    Mip->SizeY = Height;
+    Mip->BulkData.Lock(LOCK_READ_WRITE);
+    const uint32 Size = NumBlocksX * NumBlocksY * GPixelFormats[InFormat].BlockBytes;
+    Mip->BulkData.Realloc(Size);
+    Mip->BulkData.Unlock();
+    
+    uint8* Data = static_cast<uint8*>(Mip->BulkData.Lock(LOCK_READ_WRITE));
+    FMemory::Memcpy(Data, InData, Size);
+    Mip->BulkData.Unlock();
+    NewTexture->UpdateResource();
+    return NewTexture;
+}
+
+UTexture2D* ReadTextureFromBuffer(const UUnrealNexusData* NexusData, const uint8* Buffer, UINT32 Offset, UINT32 TextureSize, uint32 NodeID)
+{
+    const uint8* TextureMemory = Buffer + Offset;
+    TArray64<uint8> DecodedTexture;
+    IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+    TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::JPEG);
+
+    check(ImageWrapper->SetCompressed(TextureMemory, TextureSize));
+    check(ImageWrapper->GetRaw(ERGBFormat::BGRA, 8, DecodedTexture));
+    
+    const FString PackagePath = NexusData->GetOutermost()->GetName();
+    const FString TexturePackagePath = FString::Printf(TEXT("%s_NodeTexture_%d"), *PackagePath, NodeID);
+    const FString TextureName = FPaths::GetBaseFilename(TexturePackagePath);
+    UPackage* TexturePackage = CreatePackage(nullptr, *TexturePackagePath);
+    UTexture2D* NewTexture = CreateTexture2DFromData(*TextureName, TexturePackage, ImageWrapper->GetWidth(), ImageWrapper->GetHeight(), EPixelFormat::PF_B8G8R8A8, DecodedTexture.GetData());
+    TexturePackage->MarkPackageDirty();
+    return NewTexture;
+}
+
 void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer, const uint8* FileBegin) const
 {
     using namespace Utils;
@@ -149,9 +205,20 @@ void UNexusFactory::InitData(UUnrealNexusData* Data, uint8*& Buffer, const uint8
             Node.NodePatches.Add(Patches[PatchId]);
         }
     }
+
+    TArray<Texture> Textures;
     for (uint32 i = 0; i < Data->Header.n_textures; i ++)
     {
-        // Data->Textures[i] = ReadTexture(Buffer);
+        Textures.Emplace(ReadTexture(Buffer));
+    }
+
+    Data->NodeTextures.SetNum(Textures.Num());
+    for (int i = 0; i < Textures.Num() - 1; i ++)
+    {
+        Texture& This = Textures[i];
+        Texture& Next = Textures[i + 1];
+        const auto TextureSize = Next.offset - This.offset;
+        Data->NodeTextures[i] = ReadTextureFromBuffer(Data, FileBegin, This.offset, TextureSize, i);
     }
 
     //find number of roots:
