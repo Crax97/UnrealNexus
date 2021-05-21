@@ -1,7 +1,5 @@
 ﻿#include "NexusFactory.h"
 
-
-#include "AssetRegistryModule.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "UnrealNexusData.h"
@@ -10,7 +8,6 @@
 #include "NodeDataFactory.h"	
 #include "Engine/Texture2D.h"
 #include "Factories/Texture2dFactoryNew.h"
-#include "Factories/TextureFactory.h"
 
 DEFINE_LOG_CATEGORY(NexusEditorInfo)
 DEFINE_LOG_CATEGORY(NexusEditorErrors)
@@ -103,36 +100,36 @@ bool UNexusFactory::ReadDataIntoNexusFile(UUnrealNexusData* UnrealNexusData, uin
     return ParseHeader(UnrealNexusData, Buffer, BufferEnd);
 }
 
-// THANK YOU https://isaratech.com/save-a-procedurally-generated-texture-as-a-new-asset/
 UTexture2D* CreateTexture2DFromData(FName Name, UPackage* Outer, int Width, int Height, EPixelFormat InFormat, uint8* InData)
 {
     // Copied from UTexture2D::CreateTransient()
-    UTextureFactory* Factory = NewObject<UTextureFactory>();
-    UTexture2D* NewTexture = Factory->CreateTexture2D(Outer, Name, RF_Public | RF_Standalone | RF_MarkAsRootSet);
+    UTexture2D* NewTexture = NewObject<UTexture2D>(
+    Outer,
+    Name,
+    RF_Public | RF_Standalone
+    );
+    
     NewTexture->PlatformData = new FTexturePlatformData();
     NewTexture->PlatformData->SizeX = Width;
     NewTexture->PlatformData->SizeY = Height;
-    NewTexture->PlatformData->SetNumSlices(1);
     NewTexture->PlatformData->PixelFormat = InFormat;
-    
+
     // Allocate first mipmap.
     const int32 NumBlocksX = Width / GPixelFormats[InFormat].BlockSizeX;
     const int32 NumBlocksY = Height / GPixelFormats[InFormat].BlockSizeY;
     FTexture2DMipMap* Mip = new FTexture2DMipMap();
-    NewTexture->PlatformData->Mips.Add(Mip); 
+    NewTexture->PlatformData->Mips.Add(Mip);
     Mip->SizeX = Width;
     Mip->SizeY = Height;
     Mip->BulkData.Lock(LOCK_READ_WRITE);
-    
     const uint32 Size = NumBlocksX * NumBlocksY * GPixelFormats[InFormat].BlockBytes;
-    uint8* Data = static_cast<uint8*>(Mip->BulkData.Realloc(Size));
+    Mip->BulkData.Realloc(Size);
+    Mip->BulkData.Unlock();
+    
+    uint8* Data = static_cast<uint8*>(Mip->BulkData.Lock(LOCK_READ_WRITE));
     FMemory::Memcpy(Data, InData, Size);
     Mip->BulkData.Unlock();
-    NewTexture->PowerOfTwoMode = ETexturePowerOfTwoSetting::Type::PadToPowerOfTwo;
-    NewTexture->UpdateResource(); 
-    NewTexture->Source.Init(Width, Height, 1, 1, ETextureSourceFormat::TSF_BGRA8, InData);
-    FAssetRegistryModule::AssetCreated(NewTexture);
-    
+    NewTexture->UpdateResource();
     return NewTexture;
 }
 
@@ -150,7 +147,6 @@ UTexture2D* ReadTextureFromBuffer(const UUnrealNexusData* NexusData, const uint8
     const FString TexturePackagePath = FString::Printf(TEXT("%s_NodeTexture_%d"), *PackagePath, NodeID);
     const FString TextureName = FPaths::GetBaseFilename(TexturePackagePath);
     UPackage* TexturePackage = CreatePackage(nullptr, *TexturePackagePath);
-    TexturePackage->FullyLoad();
     UTexture2D* NewTexture = CreateTexture2DFromData(*TextureName, TexturePackage, ImageWrapper->GetWidth(), ImageWrapper->GetHeight(), EPixelFormat::PF_B8G8R8A8, DecodedTexture.GetData());
     TexturePackage->MarkPackageDirty();
     return NewTexture;
